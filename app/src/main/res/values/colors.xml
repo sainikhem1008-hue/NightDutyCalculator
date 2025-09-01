@@ -1,5 +1,5 @@
 <resources>
-    <color name="mainBlue">#1976D2</color>
-    <color name="mainBlueDark">#115293</color>
-    <color name="mainAccent">#FF4081</color>
+    <color name="colorPrimary">#1976D2</color>
+    <color name="colorPrimaryDark">#115293</color>
+    <color name="colorAccent">#FF4081</color>
 </resources>
