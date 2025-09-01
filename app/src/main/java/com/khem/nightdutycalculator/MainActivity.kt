@@ -60,38 +60,34 @@ fun NightDutyCalculatorScreen() {
     var showFromTimePicker by remember { mutableStateOf(false) }
     var showToTimePicker by remember { mutableStateOf(false) }
 
-    if (showDatePicker) {
-        DatePickerDialog(
-            initialDate = LocalDate.parse(dutyDate),
-            onDateSelected = {
-                dutyDate = it.format(DateTimeFormatter.ISO_DATE)
-                showDatePicker = false
-            },
-            onDismiss = { showDatePicker = false }
-        )
-    }
-
-    if (showFromTimePicker) {
-        TimePickerDialog(
-            time = fromTime,
-            onTimeSelected = {
-                fromTime = it
-                showFromTimePicker = false
-            },
-            onDismiss = { showFromTimePicker = false }
-        )
-    }
-
-    if (showToTimePicker) {
-        TimePickerDialog(
-            time = toTime,
-            onTimeSelected = {
-                toTime = it
-                showToTimePicker = false
-            },
-            onDismiss = { showToTimePicker = false }
-        )
-    }
+    // Dialog composables
+    ShowDatePickerDialog(
+        show = showDatePicker,
+        initialDate = LocalDate.parse(dutyDate),
+        onDateSelected = {
+            dutyDate = it.format(DateTimeFormatter.ISO_DATE)
+            showDatePicker = false
+        },
+        onDismiss = { showDatePicker = false }
+    )
+    ShowTimePickerDialog(
+        show = showFromTimePicker,
+        initialTime = fromTime,
+        onTimeSelected = {
+            fromTime = it
+            showFromTimePicker = false
+        },
+        onDismiss = { showFromTimePicker = false }
+    )
+    ShowTimePickerDialog(
+        show = showToTimePicker,
+        initialTime = toTime,
+        onTimeSelected = {
+            toTime = it
+            showToTimePicker = false
+        },
+        onDismiss = { showToTimePicker = false }
+    )
 
     if (showLeaveDialog) {
         AlertDialog(
@@ -125,7 +121,7 @@ fun NightDutyCalculatorScreen() {
                 keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Text)
             )
             IconButton(onClick = { showDatePicker = true }) {
-                Icon(Icons.Default.DateRange, contentDescription = "Pick Date")
+                Icon(Icons.Filled.DateRange, contentDescription = "Pick Date")
             }
         }
 
@@ -138,7 +134,7 @@ fun NightDutyCalculatorScreen() {
                 keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number)
             )
             IconButton(onClick = { showFromTimePicker = true }) {
-                Icon(Icons.Default.Schedule, contentDescription = "Pick From Time")
+                Icon(Icons.Filled.Schedule, contentDescription = "Pick From Time")
             }
             Spacer(Modifier.width(8.dp))
             OutlinedTextField(
@@ -149,7 +145,7 @@ fun NightDutyCalculatorScreen() {
                 keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number)
             )
             IconButton(onClick = { showToTimePicker = true }) {
-                Icon(Icons.Default.Schedule, contentDescription = "Pick To Time")
+                Icon(Icons.Filled.Schedule, contentDescription = "Pick To Time")
             }
         }
 
@@ -272,46 +268,59 @@ fun NightDutyCalculatorScreen() {
     }
 }
 
-// Simple Compose DatePicker dialog using system picker
+// Dialog implementations -- do NOT use remember with composable calls!
 @Composable
-fun DatePickerDialog(initialDate: LocalDate, onDateSelected: (LocalDate) -> Unit, onDismiss: () -> Unit) {
-    val datePicker = remember { android.app.DatePickerDialog(
-        LocalContext.current,
-        { _, year, month, day ->
-            onDateSelected(LocalDate.of(year, month + 1, day))
-        },
-        initialDate.year,
-        initialDate.monthValue - 1,
-        initialDate.dayOfMonth
-    ) }
-    DisposableEffect(Unit) {
-        datePicker.setOnCancelListener { onDismiss() }
-        datePicker.show()
-        onDispose { }
+fun ShowDatePickerDialog(
+    show: Boolean,
+    initialDate: LocalDate,
+    onDateSelected: (LocalDate) -> Unit,
+    onDismiss: () -> Unit
+) {
+    if (show) {
+        val context = LocalContext.current
+        LaunchedEffect(show) {
+            android.app.DatePickerDialog(
+                context,
+                { _, year, month, day ->
+                    onDateSelected(LocalDate.of(year, month + 1, day))
+                },
+                initialDate.year,
+                initialDate.monthValue - 1,
+                initialDate.dayOfMonth
+            ).apply {
+                setOnCancelListener { onDismiss() }
+            }.show()
+        }
     }
 }
 
-// Simple Compose TimePicker dialog using system picker
 @Composable
-fun TimePickerDialog(time: String, onTimeSelected: (String) -> Unit, onDismiss: () -> Unit) {
-    val parsedTime = try { LocalTime.parse(time) } catch (e: Exception) { LocalTime.of(0,0) }
-    val timePicker = remember { android.app.TimePickerDialog(
-        LocalContext.current,
-        { _, hour, minute ->
-            onTimeSelected("%02d:%02d".format(hour, minute))
-        },
-        parsedTime.hour,
-        parsedTime.minute,
-        true
-    ) }
-    DisposableEffect(Unit) {
-        timePicker.setOnCancelListener { onDismiss() }
-        timePicker.show()
-        onDispose { }
+fun ShowTimePickerDialog(
+    show: Boolean,
+    initialTime: String,
+    onTimeSelected: (String) -> Unit,
+    onDismiss: () -> Unit
+) {
+    if (show) {
+        val context = LocalContext.current
+        val parsedTime = try { LocalTime.parse(initialTime) } catch (e: Exception) { LocalTime.of(0, 0) }
+        LaunchedEffect(show) {
+            android.app.TimePickerDialog(
+                context,
+                { _, hour, minute ->
+                    onTimeSelected(String.format("%02d:%02d", hour, minute))
+                },
+                parsedTime.hour,
+                parsedTime.minute,
+                true
+            ).apply {
+                setOnCancelListener { onDismiss() }
+            }.show()
+        }
     }
 }
 
-// Generates summary report string
+// Report generator
 fun generateReport(
     dutyDate: String, fromTime: String, toTime: String,
     totalDutyHours: Double, nightDutyHours: Double, allowance: Double,
