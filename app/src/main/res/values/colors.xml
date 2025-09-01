@@ -1,6 +1,5 @@
 <resources>
     <color name="mainBlue">#1976D2</color>
-    <color name="white">#FFFFFF</color>
-    <color name="regularCard">#E0E0E0</color>
-    <color name="primaryText">#212121</color>
+    <color name="mainBlueDark">#115293</color>
+    <color name="mainAccent">#FF4081</color>
 </resources>
