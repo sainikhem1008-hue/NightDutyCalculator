@@ -13,6 +13,11 @@ jobs:
     - name: Checkout code
       uses: actions/checkout@v4
 
+    - name: Download gradlew script
+      run: |
+        wget https://raw.githubusercontent.com/gradle/gradle/master/gradlew -O gradlew
+        chmod +x gradlew
+
     - name: Download gradle-wrapper.jar
       run: |
         mkdir -p gradle/wrapper
@@ -23,9 +28,6 @@ jobs:
       with:
         distribution: 'temurin'
         java-version: '17'
-
-    - name: Make gradlew executable
-      run: chmod +x ./gradlew
 
     - name: Build Debug APK
       run: ./gradlew assembleDebug
