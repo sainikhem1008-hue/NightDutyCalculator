@@ -6,8 +6,8 @@ import androidx.activity.compose.setContent
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
-import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.material.*
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.DateRange
@@ -15,13 +15,16 @@ import androidx.compose.material.icons.filled.Schedule
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.shadow
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.sp
 import java.time.LocalDate
-import java.time.format.DateTimeFormatter
 import java.time.LocalTime
+import java.time.format.DateTimeFormatter
 
 class MainActivity : ComponentActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
@@ -33,7 +36,7 @@ class MainActivity : ComponentActivity() {
 @Composable
 fun NightDutyCalculatorApp() {
     MaterialTheme {
-        Surface(color = Color(0xFFF9F9F9), modifier = Modifier.fillMaxSize()) {
+        Surface(color = Color(0xFFF5F5F5), modifier = Modifier.fillMaxSize()) {
             NightDutyCalculatorScreen()
         }
     }
@@ -42,35 +45,41 @@ fun NightDutyCalculatorApp() {
 @Composable
 fun NightDutyCalculatorScreen() {
     val scrollState = rememberScrollState()
-    val context = LocalContext.current
-    var dutyDate by remember { mutableStateOf(LocalDate.now().format(DateTimeFormatter.ISO_DATE)) }
+    var dutyDate by remember { mutableStateOf(LocalDate.now()) }
+    var showDatePicker by remember { mutableStateOf(false) }
+
     var fromTime by remember { mutableStateOf("22:00") }
     var toTime by remember { mutableStateOf("06:00") }
+    var showFromTimePicker by remember { mutableStateOf(false) }
+    var showToTimePicker by remember { mutableStateOf(false) }
+
     var ceilingLimit by remember { mutableStateOf("43600") }
     var basicPay by remember { mutableStateOf("43600") }
     var daPercent by remember { mutableStateOf("55.0") }
     var isNationalHoliday by remember { mutableStateOf(false) }
     var isWeeklyRest by remember { mutableStateOf(false) }
+
     var totalDutyHours by remember { mutableStateOf(0.0) }
     var nightDutyHours by remember { mutableStateOf(0.0) }
     var allowance by remember { mutableStateOf(0.0) }
+    var ndaAmount by remember { mutableStateOf(0.0) }
     var reportText by remember { mutableStateOf("") }
-    var showLeaveDialog by remember { mutableStateOf(false) }
-    var showDatePicker by remember { mutableStateOf(false) }
-    var showFromTimePicker by remember { mutableStateOf(false) }
-    var showToTimePicker by remember { mutableStateOf(false) }
 
-    // Dialog composables
-    ShowDatePickerDialog(
+    var leaveEntries by remember { mutableStateOf(listOf<String>()) }
+    var showLeaveDialog by remember { mutableStateOf(false) }
+    var newLeaveEntry by remember { mutableStateOf("") }
+
+    // --- Dialogs ---
+    DatePickerDialog(
         show = showDatePicker,
-        initialDate = LocalDate.parse(dutyDate),
+        initialDate = dutyDate,
         onDateSelected = {
-            dutyDate = it.format(DateTimeFormatter.ISO_DATE)
+            dutyDate = it
             showDatePicker = false
         },
         onDismiss = { showDatePicker = false }
     )
-    ShowTimePickerDialog(
+    TimePickerDialog(
         show = showFromTimePicker,
         initialTime = fromTime,
         onTimeSelected = {
@@ -79,7 +88,7 @@ fun NightDutyCalculatorScreen() {
         },
         onDismiss = { showFromTimePicker = false }
     )
-    ShowTimePickerDialog(
+    TimePickerDialog(
         show = showToTimePicker,
         initialTime = toTime,
         onTimeSelected = {
@@ -93,45 +102,98 @@ fun NightDutyCalculatorScreen() {
         AlertDialog(
             onDismissRequest = { showLeaveDialog = false },
             title = { Text("Leave Management") },
-            text = { Text("This is a placeholder for leave management. Add or view leaves here.") },
-            confirmButton = {
-                Button(onClick = { showLeaveDialog = false }) {
-                    Text("Close")
+            text = {
+                Column {
+                    Text("Add Leave Note:")
+                    OutlinedTextField(
+                        value = newLeaveEntry,
+                        onValueChange = { newLeaveEntry = it },
+                        label = { Text("Leave Note") }
+                    )
+                    Spacer(Modifier.height(8.dp))
+                    Button(onClick = {
+                        if (newLeaveEntry.isNotBlank()) {
+                            leaveEntries = leaveEntries + newLeaveEntry
+                            newLeaveEntry = ""
+                        }
+                    }) { Text("Add") }
+                    Spacer(Modifier.height(8.dp))
+                    Text("Current Leaves:", fontWeight = FontWeight.Bold)
+                    leaveEntries.forEachIndexed { index, entry ->
+                        Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
+                            Text(entry)
+                            IconButton(onClick = {
+                                leaveEntries = leaveEntries.filterIndexed { i, _ -> i != index }
+                            }) {
+                                Icon(Icons.Filled.Schedule, contentDescription = "Remove")
+                            }
+                        }
+                    }
                 }
+            },
+            confirmButton = {
+                Button(onClick = { showLeaveDialog = false }) { Text("Close") }
             }
         )
     }
 
+    // --- Layout ---
     Column(
         modifier = Modifier
             .fillMaxSize()
             .verticalScroll(scrollState)
-            .padding(16.dp)
-            .background(Color.White)
+            .padding(horizontal = 12.dp)
     ) {
-        Text("Night Duty Calculator", style = MaterialTheme.typography.h5, color = Color(0xFF1976D2))
-        Spacer(Modifier.height(12.dp))
 
-        Row(verticalAlignment = Alignment.CenterVertically) {
+        // 1. Blue Card Header
+        Card(
+            backgroundColor = Color(0xFF1976D2),
+            shape = RoundedCornerShape(12.dp),
+            elevation = 8.dp,
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(vertical = 16.dp)
+        ) {
+            Box(modifier = Modifier.padding(24.dp)) {
+                Text(
+                    "Night Duty Calculator",
+                    fontSize = 22.sp,
+                    color = Color.White,
+                    fontWeight = FontWeight.Bold,
+                    modifier = Modifier.align(Alignment.CenterStart)
+                )
+            }
+        }
+
+        // 2. Date Picker (only via calendar)
+        Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.fillMaxWidth()) {
             OutlinedTextField(
-                value = dutyDate,
-                onValueChange = { dutyDate = it },
+                value = dutyDate.format(DateTimeFormatter.ISO_DATE),
+                onValueChange = {},
                 label = { Text("Duty Date") },
+                readOnly = true,
                 modifier = Modifier.weight(1f),
-                keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Text)
+                colors = TextFieldDefaults.textFieldColors(
+                    backgroundColor = Color(0xFFE3F2FD)
+                )
             )
             IconButton(onClick = { showDatePicker = true }) {
                 Icon(Icons.Filled.DateRange, contentDescription = "Pick Date")
             }
         }
+        Spacer(Modifier.height(8.dp))
 
-        Row(verticalAlignment = Alignment.CenterVertically) {
+        // 3. Time Picker From Clock With Manual Entry
+        Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.fillMaxWidth()) {
             OutlinedTextField(
                 value = fromTime,
                 onValueChange = { fromTime = it },
                 label = { Text("From Time (HH:mm)") },
                 modifier = Modifier.weight(1f),
-                keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number)
+                keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
+                colors = TextFieldDefaults.textFieldColors(
+                    backgroundColor = Color(0xFFE3F2FD)
+                )
             )
             IconButton(onClick = { showFromTimePicker = true }) {
                 Icon(Icons.Filled.Schedule, contentDescription = "Pick From Time")
@@ -142,12 +204,16 @@ fun NightDutyCalculatorScreen() {
                 onValueChange = { toTime = it },
                 label = { Text("To Time (HH:mm)") },
                 modifier = Modifier.weight(1f),
-                keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number)
+                keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
+                colors = TextFieldDefaults.textFieldColors(
+                    backgroundColor = Color(0xFFE3F2FD)
+                )
             )
             IconButton(onClick = { showToTimePicker = true }) {
                 Icon(Icons.Filled.Schedule, contentDescription = "Pick To Time")
             }
         }
+        Spacer(Modifier.height(8.dp))
 
         OutlinedTextField(
             value = ceilingLimit,
@@ -180,57 +246,67 @@ fun NightDutyCalculatorScreen() {
             Checkbox(checked = isWeeklyRest, onCheckedChange = { isWeeklyRest = it })
             Text("Weekly Rest", modifier = Modifier.padding(start = 4.dp))
         }
+        Spacer(Modifier.height(16.dp))
 
-        Spacer(Modifier.height(12.dp))
-
-        Row(horizontalArrangement = Arrangement.SpaceBetween, modifier = Modifier.fillMaxWidth()) {
+        // 8. Major Action Buttons (Top Section)
+        Row(
+            horizontalArrangement = Arrangement.SpaceEvenly,
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(vertical = 4.dp)
+        ) {
             Button(
                 onClick = {
-                    val totalHours = calculateTimeDiff(fromTime, toTime)
-                    totalDutyHours = totalHours
+                    totalDutyHours = calculateTimeDiff(fromTime, toTime)
                     nightDutyHours = calculateNightDutyHours(fromTime, toTime)
                     val pay = basicPay.toDoubleOrNull() ?: 0.0
-                    val da = pay * (daPercent.toDoubleOrNull() ?: 0.0) / 100.0
-                    val hourlyRate = (pay + da) / 200.0
-                    allowance = if (pay <= (ceilingLimit.toDoubleOrNull() ?: pay)) hourlyRate * nightDutyHours else 0.0
+                    val daPerc = daPercent.toDoubleOrNull() ?: 0.0
+                    val da = (pay * daPerc / 100.0)
+                    allowance = if (pay <= (ceilingLimit.toDoubleOrNull() ?: pay)) ((pay + daPerc) / 200.0) * (nightDutyHours / 6.0) else 0.0
+                    ndaAmount = ((pay + (daPerc)) / 200.0) * (nightDutyHours / 6.0)
                     reportText = generateReport(
-                        dutyDate = dutyDate,
+                        dutyDate = dutyDate.format(DateTimeFormatter.ISO_DATE),
                         fromTime = fromTime,
                         toTime = toTime,
                         totalDutyHours = totalDutyHours,
                         nightDutyHours = nightDutyHours,
                         allowance = allowance,
+                        ndaAmount = ndaAmount,
                         basicPay = pay,
                         daPercent = daPercent,
                         ceilingLimit = ceilingLimit,
                         isNationalHoliday = isNationalHoliday,
-                        isWeeklyRest = isWeeklyRest
+                        isWeeklyRest = isWeeklyRest,
+                        leaveEntries = leaveEntries
                     )
-                },
-                modifier = Modifier.weight(1f)
-            ) {
-                Text("Calculate")
-            }
+                }, modifier = Modifier.weight(1f)
+            ) { Text("Calculate") }
             Spacer(Modifier.width(8.dp))
             Button(
                 onClick = { showLeaveDialog = true },
                 modifier = Modifier.weight(1f)
-            ) {
-                Text("Leave Management")
-            }
+            ) { Text("Leave Management") }
         }
 
-        Spacer(Modifier.height(8.dp))
-        Row(horizontalArrangement = Arrangement.SpaceEvenly, modifier = Modifier.fillMaxWidth()) {
+        Spacer(Modifier.height(16.dp))
+        Divider()
+
+        // 8. Secondary Action Buttons (Bottom Section, grouped)
+        Row(
+            horizontalArrangement = Arrangement.SpaceEvenly,
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(vertical = 8.dp)
+        ) {
             Button(onClick = {
-                // Save logic (stub)
+                // Save: Add current report to local history 
+                // (extend logic as needed)
             }) { Text("SAVE") }
             Button(onClick = {
-                // Export PDF logic (stub)
+                // Export PDF: Stub, use PDF library for full logic
             }) { Text("EXPORT PDF") }
             Button(onClick = {
-                // Clear logic
-                dutyDate = LocalDate.now().format(DateTimeFormatter.ISO_DATE)
+                dutyDate = LocalDate.now()
                 fromTime = "22:00"
                 toTime = "06:00"
                 ceilingLimit = "43600"
@@ -241,22 +317,30 @@ fun NightDutyCalculatorScreen() {
                 totalDutyHours = 0.0
                 nightDutyHours = 0.0
                 allowance = 0.0
+                ndaAmount = 0.0
                 reportText = ""
+                leaveEntries = emptyList()
+                newLeaveEntry = ""
             }) { Text("CLEAR ALL") }
             Button(onClick = {
-                // Exit logic (stub)
+                // Exit: In real app, call finish()
+                // For Compose preview, no-op
             }) { Text("EXIT") }
         }
 
         Spacer(Modifier.height(12.dp))
         Divider()
+
+        // Report section, scrollable
         if (reportText.isNotEmpty()) {
             Text("Report", style = MaterialTheme.typography.h6)
             Card(
                 modifier = Modifier
                     .fillMaxWidth()
                     .padding(vertical = 8.dp),
-                backgroundColor = Color(0xFFE0E0E0)
+                backgroundColor = Color(0xFFE0E0E0),
+                elevation = 4.dp,
+                shape = RoundedCornerShape(8.dp)
             ) {
                 Column(modifier = Modifier.padding(8.dp)) {
                     Text(reportText)
@@ -268,14 +352,9 @@ fun NightDutyCalculatorScreen() {
     }
 }
 
-// Dialog implementations -- do NOT use remember with composable calls!
+// --- Date & Time Picker Dialogs ---
 @Composable
-fun ShowDatePickerDialog(
-    show: Boolean,
-    initialDate: LocalDate,
-    onDateSelected: (LocalDate) -> Unit,
-    onDismiss: () -> Unit
-) {
+fun DatePickerDialog(show: Boolean, initialDate: LocalDate, onDateSelected: (LocalDate) -> Unit, onDismiss: () -> Unit) {
     if (show) {
         val context = LocalContext.current
         LaunchedEffect(show) {
@@ -295,12 +374,7 @@ fun ShowDatePickerDialog(
 }
 
 @Composable
-fun ShowTimePickerDialog(
-    show: Boolean,
-    initialTime: String,
-    onTimeSelected: (String) -> Unit,
-    onDismiss: () -> Unit
-) {
+fun TimePickerDialog(show: Boolean, initialTime: String, onTimeSelected: (String) -> Unit, onDismiss: () -> Unit) {
     if (show) {
         val context = LocalContext.current
         val parsedTime = try { LocalTime.parse(initialTime) } catch (e: Exception) { LocalTime.of(0, 0) }
@@ -320,28 +394,7 @@ fun ShowTimePickerDialog(
     }
 }
 
-// Report generator
-fun generateReport(
-    dutyDate: String, fromTime: String, toTime: String,
-    totalDutyHours: Double, nightDutyHours: Double, allowance: Double,
-    basicPay: Double, daPercent: String, ceilingLimit: String,
-    isNationalHoliday: Boolean, isWeeklyRest: Boolean
-): String {
-    return buildString {
-        appendLine("Date: $dutyDate")
-        appendLine("Duration: $fromTime to $toTime")
-        appendLine("Total Duty: %.2f hrs".format(totalDutyHours))
-        appendLine("Night Duty: %.2f hrs".format(nightDutyHours))
-        appendLine("Allowance: \u20B9%.2f".format(allowance))
-        appendLine("Basic Pay: \u20B9%.2f".format(basicPay))
-        appendLine("DA: $daPercent%")
-        appendLine("Ceiling Limit: \u20B9$ceilingLimit")
-        if (isNationalHoliday) appendLine("National Holiday: Yes")
-        if (isWeeklyRest) appendLine("Weekly Rest: Yes")
-    }
-}
-
-// --- NDA Logic & Helpers ---
+// --- NDA Calculation Helpers ---
 fun calculateTimeDiff(from: String, to: String): Double {
     return try {
         val fromT = LocalTime.parse(from)
@@ -376,10 +429,27 @@ fun getHourlySegments(from: String, to: String): List<Int> {
 
 fun isNightHour(hour: Int): Boolean = (hour in 22..23) || (hour in 0..5)
 
-fun calculateNightHours2200To0000(from: String, to: String): Double {
-    return getHourlySegments(from, to).count { it in 22..23 }.toDouble()
-}
-
-fun calculateNightHours0000To0600(from: String, to: String): Double {
-    return getHourlySegments(from, to).count { it in 0..5 }.toDouble()
+fun generateReport(
+    dutyDate: String, fromTime: String, toTime: String,
+    totalDutyHours: Double, nightDutyHours: Double, allowance: Double, ndaAmount: Double,
+    basicPay: Double, daPercent: String, ceilingLimit: String,
+    isNationalHoliday: Boolean, isWeeklyRest: Boolean, leaveEntries: List<String>
+): String {
+    return buildString {
+        appendLine("Date: $dutyDate")
+        appendLine("Duration: $fromTime to $toTime")
+        appendLine("Total Duty Hours: %.2f".format(totalDutyHours))
+        appendLine("Total Night Duty Hours: %.2f".format(nightDutyHours))
+        appendLine("NDA (Exact): \u20B9%.2f".format(ndaAmount))
+        appendLine("Allowance: \u20B9%.2f".format(allowance))
+        appendLine("Basic Pay: \u20B9%.2f".format(basicPay))
+        appendLine("DA: $daPercent%")
+        appendLine("Ceiling Limit: \u20B9$ceilingLimit")
+        if (isNationalHoliday) appendLine("National Holiday: Yes")
+        if (isWeeklyRest) appendLine("Weekly Rest: Yes")
+        if (leaveEntries.isNotEmpty()) {
+            appendLine("Leave Records:")
+            leaveEntries.forEach { appendLine("• $it") }
+        }
+    }
 }
