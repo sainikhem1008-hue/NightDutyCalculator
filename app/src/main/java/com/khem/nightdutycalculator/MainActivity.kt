@@ -1,4 +1,5 @@
 package com.khem.nightdutycalculator
+
 import android.os.Bundle
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
@@ -13,7 +14,6 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.unit.dp
 import java.time.LocalTime
-
 
 class MainActivity : ComponentActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
@@ -35,6 +35,9 @@ fun NightDutyCalculatorScreen() {
     var totalDutyHours by remember { mutableStateOf(0.0) }
     var nightDutyHours by remember { mutableStateOf(0.0) }
     var allowance by remember { mutableStateOf(0.0) }
+    // ... rest of Compose UI code
+}
+
     
     Scaffold(topBar = { TopAppBar(title = { Text("Night Duty Calculator") }) }) { padding ->
         Column(
