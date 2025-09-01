@@ -1,6 +1,6 @@
 plugins {
     id 'com.android.application' version '8.2.0'
-    id 'org.jetbrains.kotlin.android' version '1.9.0'
+    id 'org.jetbrains.kotlin.android' version '1.9.10'
 }
 
 
@@ -19,7 +19,7 @@ android {
     compileSdkVersion 34
     defaultConfig {
         applicationId "com.khem.nightdutycalculator"
-        minSdkVersion 21
+        minSdkVersion 26
         targetSdkVersion 34
         versionCode 1
         versionName "1.0"
