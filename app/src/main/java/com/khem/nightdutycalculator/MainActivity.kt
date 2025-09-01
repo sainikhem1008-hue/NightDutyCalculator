@@ -35,7 +35,7 @@ fun NightDutyCalculatorScreen() {
     var totalDutyHours by remember { mutableStateOf(0.0) }
     var nightDutyHours by remember { mutableStateOf(0.0) }
     var allowance by remember { mutableStateOf(0.0) }
-    
+
     Scaffold(topBar = { TopAppBar(title = { Text("Night Duty Calculator") }) }) { padding ->
         Column(
             modifier = Modifier
@@ -49,7 +49,7 @@ fun NightDutyCalculatorScreen() {
                 value = dutyDate, onValueChange = { dutyDate = it },
                 label = { Text("Duty Date") }, modifier = Modifier.fillMaxWidth()
             )
-            
+
             Row {
                 OutlinedTextField(
                     value = fromTime,
@@ -167,7 +167,7 @@ fun NightDutyCalculatorScreen() {
     }
 }
 
-// ----- Helper Functions -----
+// --- Helper Functions (all top-level, not nested) ---
 fun calculateTimeDiff(from: String, to: String): Double {
     return try {
         val fromT = LocalTime.parse(from)
@@ -209,3 +209,4 @@ fun calculateNightHours2200To0000(from: String, to: String): Double {
 fun calculateNightHours0000To0600(from: String, to: String): Double {
     return getHourlySegments(from, to).count { it in 0..5 }.toDouble()
 }
+
