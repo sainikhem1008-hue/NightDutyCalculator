@@ -35,9 +35,6 @@ fun NightDutyCalculatorScreen() {
     var totalDutyHours by remember { mutableStateOf(0.0) }
     var nightDutyHours by remember { mutableStateOf(0.0) }
     var allowance by remember { mutableStateOf(0.0) }
-    // ... rest of Compose UI code
-}
-
     
     Scaffold(topBar = { TopAppBar(title = { Text("Night Duty Calculator") }) }) { padding ->
         Column(
@@ -170,7 +167,7 @@ fun NightDutyCalculatorScreen() {
     }
 }
 
-// Helper functions
+// ----- Helper Functions -----
 fun calculateTimeDiff(from: String, to: String): Double {
     return try {
         val fromT = LocalTime.parse(from)
