@@ -8,6 +8,7 @@ import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.material.*
 import androidx.compose.runtime.*
+import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.input.KeyboardType
@@ -36,11 +37,12 @@ fun NightDutyCalculatorScreen() {
     var allowance by remember { mutableStateOf(0.0) }
     
     Scaffold(topBar = { TopAppBar(title = { Text("Night Duty Calculator") }) }) { padding ->
-        Column(modifier = Modifier
-            .padding(padding)
-            .padding(16.dp)
-            .background(Color.White)) {
-
+        Column(
+            modifier = Modifier
+                .padding(padding)
+                .padding(16.dp)
+                .background(Color.White)
+        ) {
             Text("Calculate and track your allowances", style = MaterialTheme.typography.h6)
 
             OutlinedTextField(
@@ -50,14 +52,16 @@ fun NightDutyCalculatorScreen() {
             
             Row {
                 OutlinedTextField(
-                    value = fromTime, onValueChange = { fromTime = it },
+                    value = fromTime,
+                    onValueChange = { fromTime = it },
                     label = { Text("From Time (HH:mm)") },
                     keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
                     modifier = Modifier.weight(1f)
                 )
                 Spacer(Modifier.width(8.dp))
                 OutlinedTextField(
-                    value = toTime, onValueChange = { toTime = it },
+                    value = toTime,
+                    onValueChange = { toTime = it },
                     label = { Text("To Time (HH:mm)") },
                     keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
                     modifier = Modifier.weight(1f)
@@ -65,31 +69,34 @@ fun NightDutyCalculatorScreen() {
             }
 
             OutlinedTextField(
-                value = ceilingLimit, onValueChange = { ceilingLimit = it },
+                value = ceilingLimit,
+                onValueChange = { ceilingLimit = it },
                 label = { Text("Ceiling Limit (\u20B9)") },
                 keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
                 modifier = Modifier.fillMaxWidth()
             )
 
             OutlinedTextField(
-                value = basicPay, onValueChange = { basicPay = it },
+                value = basicPay,
+                onValueChange = { basicPay = it },
                 label = { Text("Basic Pay (\u20B9)") },
                 keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
                 modifier = Modifier.fillMaxWidth()
             )
 
             OutlinedTextField(
-                value = daPercent, onValueChange = { daPercent = it },
+                value = daPercent,
+                onValueChange = { daPercent = it },
                 label = { Text("Dearness Allowance (%)") },
                 keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
                 modifier = Modifier.fillMaxWidth()
             )
 
-            Row(verticalAlignment = androidx.compose.ui.Alignment.CenterVertically) {
+            Row(verticalAlignment = Alignment.CenterVertically) {
                 Checkbox(checked = isNationalHoliday, onCheckedChange = { isNationalHoliday = it })
                 Text("National Holiday", modifier = Modifier.padding(start = 4.dp))
             }
-            Row(verticalAlignment = androidx.compose.ui.Alignment.CenterVertically) {
+            Row(verticalAlignment = Alignment.CenterVertically) {
                 Checkbox(checked = isWeeklyRest, onCheckedChange = { isWeeklyRest = it })
                 Text("Weekly Rest", modifier = Modifier.padding(start = 4.dp))
             }
@@ -97,19 +104,17 @@ fun NightDutyCalculatorScreen() {
             Spacer(Modifier.height(12.dp))
 
             Row {
-                Button(
-                    onClick = {
-                        val totalHours = calculateTimeDiff(fromTime, toTime)
-                        totalDutyHours = totalHours
+                Button(onClick = {
+                    val totalHours = calculateTimeDiff(fromTime, toTime)
+                    totalDutyHours = totalHours
 
-                        nightDutyHours = calculateNightDutyHours(fromTime, toTime)
-                        
-                        val pay = basicPay.toDoubleOrNull() ?: 0.0
-                        val da = pay * (daPercent.toDoubleOrNull() ?: 0.0) / 100.0
-                        val hourlyRate = (pay + da) / 200.0
-                        allowance = if (pay <= (ceilingLimit.toDoubleOrNull() ?: pay)) hourlyRate * nightDutyHours else 0.0
-                    }, modifier = Modifier.weight(1f)
-                ) {
+                    nightDutyHours = calculateNightDutyHours(fromTime, toTime)
+
+                    val pay = basicPay.toDoubleOrNull() ?: 0.0
+                    val da = pay * (daPercent.toDoubleOrNull() ?: 0.0) / 100.0
+                    val hourlyRate = (pay + da) / 200.0
+                    allowance = if (pay <= (ceilingLimit.toDoubleOrNull() ?: pay)) hourlyRate * nightDutyHours else 0.0
+                }, modifier = Modifier.weight(1f)) {
                     Text("Calculate Allowance")
                 }
                 Spacer(Modifier.width(8.dp))
@@ -138,12 +143,22 @@ fun NightDutyCalculatorScreen() {
             Spacer(Modifier.height(12.dp))
             Divider()
             // History cards (mock)
-            Card(modifier = Modifier.fillMaxWidth().padding(vertical = 4.dp), backgroundColor = Color(0xFFE0E0E0)) {
+            Card(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(vertical = 4.dp),
+                backgroundColor = Color(0xFFE0E0E0)
+            ) {
                 Column(modifier = Modifier.padding(8.dp)) {
                     Text("01/09/2025 | 16:00-00:00 | ₹112.63 | Regular")
                 }
             }
-            Card(modifier = Modifier.fillMaxWidth().padding(vertical = 4.dp), backgroundColor = Color(0xFFE0E0E0)) {
+            Card(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(vertical = 4.dp),
+                backgroundColor = Color(0xFFE0E0E0)
+            ) {
                 Column(modifier = Modifier.padding(8.dp)) {
                     Text("02/09/2025 | 00:00-08:00 | ₹337.90 | Regular")
                 }
@@ -152,6 +167,7 @@ fun NightDutyCalculatorScreen() {
     }
 }
 
+// Helper functions
 fun calculateTimeDiff(from: String, to: String): Double {
     return try {
         val fromT = LocalTime.parse(from)
@@ -171,19 +187,20 @@ fun calculateNightDutyHours(from: String, to: String): Double {
 }
 
 fun getHourlySegments(from: String, to: String): List<Int> {
-    try {
-        val fromT = LocalTime.parse(from); val toT = LocalTime.parse(to)
+    return try {
+        val fromT = LocalTime.parse(from)
+        val toT = LocalTime.parse(to)
         val hours = mutableListOf<Int>()
         var current = fromT.hour
-        val total = ((calculateTimeDiff(from, to)).toInt())
+        val total = (calculateTimeDiff(from, to)).toInt()
         repeat(total) {
             hours.add((current + it) % 24)
         }
-        return hours
-    } catch (ex: Exception) { return emptyList() }
+        hours
+    } catch (ex: Exception) { emptyList() }
 }
 
-fun isNightHour(hour: Int) = (hour in 22..23) || (hour in 0..5)
+fun isNightHour(hour: Int): Boolean = (hour in 22..23) || (hour in 0..5)
 
 fun calculateNightHours2200To0000(from: String, to: String): Double {
     return getHourlySegments(from, to).count { it in 22..23 }.toDouble()
