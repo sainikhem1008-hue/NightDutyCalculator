@@ -1,7 +1,7 @@
 <resources>
     <style name="Theme.NightDutyCalculator" parent="Theme.MaterialComponents.DayNight.DarkActionBar">
-        <item name="colorPrimary">@color/mainBlue</item>
-        <item name="colorPrimaryDark">@color/mainBlueDark</item>
-        <item name="colorAccent">@color/mainAccent</item>
+        <item name="colorPrimary">@color/colorPrimary</item>
+        <item name="colorPrimaryDark">@color/colorPrimaryDark</item>
+        <item name="colorAccent">@color/colorAccent</item>
     </style>
 </resources>
