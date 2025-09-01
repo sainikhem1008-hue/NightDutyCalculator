@@ -3,6 +3,7 @@ plugins {
     id 'org.jetbrains.kotlin.android' version '1.9.0'
 }
 android {
+    namespace 'com.khem.nightdutycalculator'
     compileSdkVersion 34
     defaultConfig {
         applicationId "com.khem.nightdutycalculator"
