@@ -13,8 +13,9 @@ jobs:
     - name: Checkout code
       uses: actions/checkout@v4
 
-    - name: Fix line endings for gradlew
-      run: dos2unix gradlew
+    # Convert gradlew CRLF to proper LF for Linux bash
+    - name: Convert gradlew to Unix line endings
+      run: sed -i 's/\r$//' gradlew
 
     - name: Make gradlew executable
       run: chmod +x ./gradlew
