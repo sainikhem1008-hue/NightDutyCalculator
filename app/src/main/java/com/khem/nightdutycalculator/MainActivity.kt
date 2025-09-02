@@ -1,240 +1,529 @@
 package com.khem.nightdutycalculator
 
-import android.app.DatePickerDialog
-import android.app.TimePickerDialog
 import android.os.Bundle
-import android.view.View
-import android.widget.*
-import androidx.appcompat.app.AlertDialog
-import androidx.appcompat.app.AppCompatActivity
-import androidx.recyclerview.widget.LinearLayoutManager
-import androidx.recyclerview.widget.RecyclerView
+import androidx.activity.ComponentActivity
+import androidx.activity.compose.setContent
+import androidx.compose.foundation.background
+import androidx.compose.foundation.layout.*
+import androidx.compose.foundation.lazy.LazyColumn
+import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.material.*
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.DateRange
+import androidx.compose.material.icons.filled.Schedule
+import androidx.compose.runtime.*
+import androidx.compose.ui.Alignment
+import androidx.compose.ui.Modifier
+import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.sp
 import java.time.LocalDate
 import java.time.LocalTime
 import java.time.format.DateTimeFormatter
 
-class MainActivity : AppCompatActivity() {
-
-    private lateinit var etDutyDate: EditText
-    private lateinit var etDutyFrom: EditText
-    private lateinit var etDutyTo: EditText
-    private lateinit var etCeilingLimit: EditText
-    private lateinit var etBasicPay: EditText
-    private lateinit var etDearnessAllowance: EditText
-    private lateinit var cbNationalHoliday: CheckBox
-    private lateinit var cbWeeklyRest: CheckBox
-    private lateinit var btnCalculate: Button
-    private lateinit var btnLeaveManagement: Button
-    private lateinit var btnSave: Button
-    private lateinit var btnExport: Button
-    private lateinit var btnClear: Button
-    private lateinit var btnExit: Button
-    private lateinit var llResults: LinearLayout
-    private lateinit var tvResults: TextView
-    private lateinit var tvCeilingWarning: TextView
-    private lateinit var rvRecords: RecyclerView
-
-    private var history = mutableListOf<String>()
-
-    private val dateFormatter = DateTimeFormatter.ofPattern("yyyy-MM-dd")
-    private var selectedDate: LocalDate = LocalDate.now()
-    private var fromTime: LocalTime = LocalTime.of(0, 0)
-    private var toTime: LocalTime = LocalTime.of(8, 0)
-
+class MainActivity : ComponentActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
-        setContentView(R.layout.activity_main)
-
-        // Find views by ID
-        etDutyDate = findViewById(R.id.etDutyDate)
-        etDutyFrom = findViewById(R.id.etDutyFrom)
-        etDutyTo = findViewById(R.id.etDutyTo)
-        etCeilingLimit = findViewById(R.id.etCeilingLimit)
-        etBasicPay = findViewById(R.id.etBasicPay)
-        etDearnessAllowance = findViewById(R.id.etDearnessAllowance)
-        cbNationalHoliday = findViewById(R.id.cbNationalHoliday)
-        cbWeeklyRest = findViewById(R.id.cbWeeklyRest)
-        btnCalculate = findViewById(R.id.btnCalculate)
-        btnLeaveManagement = findViewById(R.id.btnLeaveManagement)
-        btnSave = findViewById(R.id.btnSave)
-        btnExport = findViewById(R.id.btnExport)
-        btnClear = findViewById(R.id.btnClear)
-        btnExit = findViewById(R.id.btnExit)
-        llResults = findViewById(R.id.llResults)
-        tvResults = findViewById(R.id.tvResults)
-        tvCeilingWarning = findViewById(R.id.tvCeilingWarning)
-        rvRecords = findViewById(R.id.rvRecords)
-
-        // Default values
-        etDutyDate.setText(selectedDate.format(dateFormatter))
-        etDutyFrom.setText("00:00")
-        etDutyTo.setText("08:00")
-        etCeilingLimit.setText("43600")
-        etBasicPay.setText("43600")
-        etDearnessAllowance.setText("55.0")
-
-        llResults.visibility = View.GONE
-        tvCeilingWarning.visibility = View.GONE
-
-        // Pickers
-        etDutyDate.setOnClickListener { showDatePicker() }
-        etDutyFrom.setOnClickListener { showTimePicker(true) }
-        etDutyTo.setOnClickListener { showTimePicker(false) }
-
-        // Calculate button logic
-        btnCalculate.setOnClickListener { calculateAllowance() }
-
-        // Leave management
-        btnLeaveManagement.setOnClickListener { showLeaveDialog() }
-
-        // Action buttons
-        btnSave.setOnClickListener { saveResult() }
-        btnExport.setOnClickListener { exportPdf() }
-        btnClear.setOnClickListener { clearAll() }
-        btnExit.setOnClickListener { finish() }
-
-        // RecyclerView setup for records
-        rvRecords.layoutManager = LinearLayoutManager(this)
-        rvRecords.adapter = HistoryAdapter(history)
-    }
-
-    private fun showDatePicker() {
-        val d = selectedDate
-        DatePickerDialog(
-            this,
-            { _, year, month, day ->
-                selectedDate = LocalDate.of(year, month + 1, day)
-                etDutyDate.setText(selectedDate.format(dateFormatter))
-            },
-            d.year, d.monthValue - 1, d.dayOfMonth
-        ).show()
-    }
-
-    private fun showTimePicker(isFrom: Boolean) {
-        val time = if (isFrom) fromTime else toTime
-        TimePickerDialog(this, { _, h, m ->
-            val t = LocalTime.of(h, m)
-            if (isFrom) {
-                fromTime = t
-                etDutyFrom.setText(String.format("%02d:%02d", h, m))
-            } else {
-                toTime = t
-                etDutyTo.setText(String.format("%02d:%02d", h, m))
-            }
-        }, time.hour, time.minute, true).show()
-    }
-
-    private fun calculateAllowance() {
-        val ceilingLimit = etCeilingLimit.text.toString().toDoubleOrNull() ?: 0.0
-        val basicPay = etBasicPay.text.toString().toDoubleOrNull() ?: 0.0
-        val daPercent = etDearnessAllowance.text.toString().toDoubleOrNull() ?: 0.0
-        val isHoliday = cbNationalHoliday.isChecked
-        val isRest = cbWeeklyRest.isChecked
-
-        val totalDutyHours = calculateHours(fromTime, toTime)
-        val nightHours = calculateNightHours(fromTime, toTime)
-        val nda =
-            ((basicPay + (daPercent / 100)) / 200) * (nightHours / 6)
-        val nightAllowance = nda
-
-        val builder = StringBuilder()
-        builder.append("Total Duty Hours: %.2f hrs\n".format(totalDutyHours))
-        builder.append("Night Hours (22:00-06:00): %.2f hrs\n".format(nightHours))
-        builder.append("Night Allowance: ₹%.2f\n".format(nightAllowance))
-
-        tvResults.text = builder.toString()
-        llResults.visibility = View.VISIBLE
-
-        if (basicPay > ceilingLimit) {
-            tvCeilingWarning.text = "Basic Pay exceeds ceiling limit! No NDA applicable."
-            tvCeilingWarning.visibility = View.VISIBLE
-        } else {
-            tvCeilingWarning.visibility = View.GONE
-        }
-    }
-
-    private fun calculateHours(from: LocalTime, to: LocalTime): Double {
-        // Handles overnight shifts
-        val duration = if (to.isAfter(from)) {
-            to.toSecondOfDay() - from.toSecondOfDay()
-        } else {
-            24 * 3600 - from.toSecondOfDay() + to.toSecondOfDay()
-        }
-        return duration / 3600.0
-    }
-
-    private fun calculateNightHours(from: LocalTime, to: LocalTime): Double {
-        val allHours = mutableListOf<Int>()
-        var current = from.hour
-        val total = calculateHours(from, to).toInt()
-        repeat(total) {
-            allHours.add((current + it) % 24)
-        }
-        return allHours.count { it in 22..23 || it in 0..5 }.toDouble()
-    }
-
-    private fun showLeaveDialog() {
-        val builder = AlertDialog.Builder(this)
-        builder.setTitle("Leave Management")
-        val input = EditText(this)
-        input.hint = "Add Leave Note"
-        builder.setView(input)
-        builder.setPositiveButton("Add") { _, _ ->
-            val leaveNote = input.text.toString()
-            if (leaveNote.isNotBlank()) {
-                history.add("Leave: $leaveNote")
-                rvRecords.adapter?.notifyDataSetChanged()
-            }
-        }
-        builder.setNegativeButton("Cancel", null)
-        builder.show()
-    }
-
-    private fun saveResult() {
-        val result = tvResults.text.toString()
-        if (result.isNotBlank()) {
-            history.add(result)
-            rvRecords.adapter?.notifyDataSetChanged()
-            Toast.makeText(this, "Saved!", Toast.LENGTH_SHORT).show()
-        }
-    }
-
-    private fun exportPdf() {
-        // Stub: Show Toast for now
-        Toast.makeText(this, "Export PDF feature not implemented.", Toast.LENGTH_SHORT).show()
-    }
-
-    private fun clearAll() {
-        etDutyDate.setText(LocalDate.now().format(dateFormatter))
-        etDutyFrom.setText("00:00")
-        etDutyTo.setText("08:00")
-        etCeilingLimit.setText("43600")
-        etBasicPay.setText("43600")
-        etDearnessAllowance.setText("55.0")
-        cbNationalHoliday.isChecked = false
-        cbWeeklyRest.isChecked = false
-        llResults.visibility = View.GONE
-        tvCeilingWarning.visibility = View.GONE
-    }
-
-    // Simple adapter for history records
-    class HistoryAdapter(private val items: List<String>) :
-        RecyclerView.Adapter<HistoryAdapter.ViewHolder>() {
-
-        class ViewHolder(view: View) : RecyclerView.ViewHolder(view) {
-            val textView: TextView = view.findViewById(android.R.id.text1)
-        }
-
-        override fun onCreateViewHolder(parent: android.view.ViewGroup, viewType: Int): ViewHolder {
-            val view = android.view.LayoutInflater.from(parent.context)
-                .inflate(android.R.layout.simple_list_item_1, parent, false)
-            return ViewHolder(view)
-        }
-
-        override fun onBindViewHolder(holder: ViewHolder, position: Int) {
-            holder.textView.text = items[position]
-        }
-
-        override fun getItemCount(): Int = items.size
+        setContent { NightDutyCalculatorApp() }
     }
 }
+
+@Composable
+fun NightDutyCalculatorApp() {
+    MaterialTheme {
+        Surface(modifier = Modifier.fillMaxSize(), color = Color(0xFFF5F5F5)) {
+            NightDutyCalculatorScreen()
+        }
+    }
+}
+
+@Composable
+fun NightDutyCalculatorScreen() {
+    // State variables
+    val scrollState = rememberLazyListState()
+
+    var dutyDate by remember { mutableStateOf(LocalDate.now()) }
+    var showDatePicker by remember { mutableStateOf(false) }
+
+    var fromTime by remember { mutableStateOf("00:00") }
+    var toTime by remember { mutableStateOf("08:00") }
+    var showFromTimePicker by remember { mutableStateOf(false) }
+    var showToTimePicker by remember { mutableStateOf(false) }
+
+    var ceilingLimit by remember { mutableStateOf("43600") }
+    var basicPay by remember { mutableStateOf("43600") }
+    var daPercent by remember { mutableStateOf("55.0") }
+    var isNationalHoliday by remember { mutableStateOf(false) }
+    var isWeeklyRest by remember { mutableStateOf(false) }
+
+    var totalDutyHours by remember { mutableStateOf(0.0) }
+    var nightDutyHours by remember { mutableStateOf(0.0) }
+    var nightAllowance by remember { mutableStateOf(0.0) }
+    var ndaAmount by remember { mutableStateOf(0.0) }
+    var reportText by remember { mutableStateOf("") }
+    var warningText by remember { mutableStateOf("") }
+
+    var leaveEntries by remember { mutableStateOf(listOf<String>()) }
+    var showLeaveDialog by remember { mutableStateOf(false) }
+    var newLeaveEntry by remember { mutableStateOf("") }
+
+    var history by remember { mutableStateOf(listOf<String>()) }
+
+    // --- Dialogs ---
+    DatePickerDialog(
+        show = showDatePicker,
+        initialDate = dutyDate,
+        onDateSelected = {
+            dutyDate = it
+            showDatePicker = false
+        },
+        onDismiss = { showDatePicker = false }
+    )
+    TimePickerDialog(
+        show = showFromTimePicker,
+        initialTime = fromTime,
+        onTimeSelected = {
+            fromTime = it
+            showFromTimePicker = false
+        },
+        onDismiss = { showFromTimePicker = false }
+    )
+    TimePickerDialog(
+        show = showToTimePicker,
+        initialTime = toTime,
+        onTimeSelected = {
+            toTime = it
+            showToTimePicker = false
+        },
+        onDismiss = { showToTimePicker = false }
+    )
+
+    if (showLeaveDialog) {
+        AlertDialog(
+            onDismissRequest = { showLeaveDialog = false },
+            title = { Text("Leave Management", fontWeight = FontWeight.Bold) },
+            text = {
+                Column {
+                    OutlinedTextField(
+                        value = newLeaveEntry,
+                        onValueChange = { newLeaveEntry = it },
+                        label = { Text("Add Leave Note") },
+                        singleLine = true
+                    )
+                    Spacer(Modifier.height(8.dp))
+                    Button(onClick = {
+                        if (newLeaveEntry.isNotBlank()) {
+                            leaveEntries = leaveEntries + newLeaveEntry
+                            newLeaveEntry = ""
+                        }
+                    }) { Text("Add") }
+                    Spacer(Modifier.height(8.dp))
+                    Text("Current Leaves", fontWeight = FontWeight.Bold)
+                    leaveEntries.forEachIndexed { index, entry ->
+                        Row(
+                            Modifier.fillMaxWidth(),
+                            horizontalArrangement = Arrangement.SpaceBetween
+                        ) {
+                            Text(entry)
+                            IconButton(onClick = {
+                                leaveEntries = leaveEntries.filterIndexed { i, _ -> i != index }
+                            }) {
+                                Icon(Icons.Filled.Schedule, contentDescription = "Remove")
+                            }
+                        }
+                    }
+                }
+            },
+            confirmButton = {
+                Button(onClick = { showLeaveDialog = false }) { Text("Close") }
+            }
+        )
+    }
+
+    // --- Layout ---
+    LazyColumn(modifier = Modifier
+        .fillMaxSize()
+        .background(Color.White)
+        .padding(horizontal = 12.dp)
+        , state = scrollState
+    ) {
+
+        // Header Card
+        item {
+            Card(
+                backgroundColor = Color(0xFF1976D2),
+                shape = RoundedCornerShape(12.dp),
+                elevation = 8.dp,
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(vertical = 16.dp)
+            ) {
+                Column(Modifier.padding(24.dp)) {
+                    Text(
+                        "🌙 Night Duty Calculator",
+                        fontSize = 22.sp,
+                        color = Color.White,
+                        fontWeight = FontWeight.Bold
+                    )
+                    Text(
+                        "Calculate and track your allowances",
+                        fontSize = 14.sp,
+                        color = Color.White
+                    )
+                }
+            }
+        }
+
+        // --- Input Fields ---
+        item {
+            OutlinedTextField(
+                value = dutyDate.format(DateTimeFormatter.ISO_DATE),
+                onValueChange = {},
+                label = { Text("Duty Date") },
+                readOnly = true,
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(vertical = 4.dp),
+                colors = TextFieldDefaults.textFieldColors(
+                    backgroundColor = Color(0xFFE3F2FD)
+                ),
+                trailingIcon = {
+                    IconButton(onClick = { showDatePicker = true }) {
+                        Icon(Icons.Filled.DateRange, contentDescription = "Pick Date")
+                    }
+                }
+            )
+            Spacer(Modifier.height(4.dp))
+        }
+
+        item {
+            Row(
+                verticalAlignment = Alignment.CenterVertically,
+                modifier = Modifier.fillMaxWidth()
+            ) {
+                OutlinedTextField(
+                    value = fromTime,
+                    onValueChange = { fromTime = it },
+                    label = { Text("From Time (HH:mm)") },
+                    modifier = Modifier
+                        .weight(1f)
+                        .padding(end = 4.dp),
+                    keyboardOptions = KeyboardOptions.Default,
+                    colors = TextFieldDefaults.textFieldColors(
+                        backgroundColor = Color(0xFFE3F2FD)
+                    ),
+                    trailingIcon = {
+                        IconButton(onClick = { showFromTimePicker = true }) {
+                            Icon(Icons.Filled.Schedule, contentDescription = "Pick From Time")
+                        }
+                    }
+                )
+                OutlinedTextField(
+                    value = toTime,
+                    onValueChange = { toTime = it },
+                    label = { Text("To Time (HH:mm)") },
+                    modifier = Modifier
+                        .weight(1f)
+                        .padding(start = 4.dp),
+                    keyboardOptions = KeyboardOptions.Default,
+                    colors = TextFieldDefaults.textFieldColors(
+                        backgroundColor = Color(0xFFE3F2FD)
+                    ),
+                    trailingIcon = {
+                        IconButton(onClick = { showToTimePicker = true }) {
+                            Icon(Icons.Filled.Schedule, contentDescription = "Pick To Time")
+                        }
+                    }
+                )
+            }
+            Spacer(Modifier.height(4.dp))
+        }
+
+        item {
+            OutlinedTextField(
+                value = ceilingLimit,
+                onValueChange = { ceilingLimit = it },
+                label = { Text("Ceiling Limit (\u20B9)") },
+                keyboardOptions = KeyboardOptions.Default,
+                modifier = Modifier.fillMaxWidth().padding(vertical = 4.dp)
+            )
+        }
+
+        item {
+            OutlinedTextField(
+                value = basicPay,
+                onValueChange = { basicPay = it },
+                label = { Text("Basic Pay (\u20B9)") },
+                keyboardOptions = KeyboardOptions.Default,
+                modifier = Modifier.fillMaxWidth().padding(vertical = 4.dp)
+            )
+        }
+
+        item {
+            OutlinedTextField(
+                value = daPercent,
+                onValueChange = { daPercent = it },
+                label = { Text("Dearness Allowance (%)") },
+                keyboardOptions = KeyboardOptions.Default,
+                modifier = Modifier.fillMaxWidth().padding(vertical = 4.dp)
+            )
+        }
+
+        item {
+            Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.padding(vertical = 8.dp)) {
+                Checkbox(checked = isNationalHoliday, onCheckedChange = { isNationalHoliday = it })
+                Text("National Holiday", modifier = Modifier.padding(start = 4.dp))
+                Spacer(Modifier.width(24.dp))
+                Checkbox(checked = isWeeklyRest, onCheckedChange = { isWeeklyRest = it })
+                Text("Weekly Rest", modifier = Modifier.padding(start = 4.dp))
+            }
+        }
+
+        // --- Major Action Buttons ---
+        item {
+            Row(
+                horizontalArrangement = Arrangement.spacedBy(8.dp),
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(vertical = 8.dp)
+            ) {
+                Button(
+                    onClick = {
+                        totalDutyHours = calculateTimeDiff(fromTime, toTime)
+                        nightDutyHours = calculateNightDutyHours(fromTime, toTime)
+                        val pay = basicPay.toDoubleOrNull() ?: 0.0
+                        val daPerc = daPercent.toDoubleOrNull() ?: 0.0
+                        val daValue = pay * daPerc / 100.0
+                        ndaAmount = ((pay + daValue) / 200.0) * (nightDutyHours / 6.0)
+                        nightAllowance = ndaAmount
+
+                        reportText = generateReport(
+                            dutyDate = dutyDate.format(DateTimeFormatter.ISO_DATE),
+                            fromTime = fromTime,
+                            toTime = toTime,
+                            totalDutyHours = totalDutyHours,
+                            nightDutyHours = nightDutyHours,
+                            nightAllowance = nightAllowance,
+                            ndaAmount = ndaAmount,
+                            basicPay = pay,
+                            daPercent = daPercent,
+                            ceilingLimit = ceilingLimit,
+                            isNationalHoliday = isNationalHoliday,
+                            isWeeklyRest = isWeeklyRest,
+                            leaveEntries = leaveEntries
+                        )
+
+                        warningText =
+                            if (pay > (ceilingLimit.toDoubleOrNull() ?: pay))
+                                "Basic Pay exceeds ceiling limit! No NDA applicable."
+                            else
+                                ""
+                    },
+                    modifier = Modifier.weight(1f)
+                ) { Text("🧮 Calculate Allowance") }
+                Button(
+                    onClick = { showLeaveDialog = true },
+                    modifier = Modifier.weight(1f)
+                ) { Text("📅 Leave Management") }
+            }
+        }
+
+        // --- Results and Warning Banner ---
+        item {
+            if (warningText.isNotEmpty()) {
+                Card(
+                    backgroundColor = Color(0xFFFF9800),
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(vertical = 8.dp)
+                ) {
+                    Text(
+                        text = warningText,
+                        color = Color.White,
+                        fontWeight = FontWeight.Bold,
+                        modifier = Modifier.padding(12.dp)
+                    )
+                }
+            }
+
+            if (reportText.isNotEmpty()) {
+                Card(
+                    backgroundColor = Color(0xFFE0E0E0),
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(vertical = 8.dp),
+                    elevation = 4.dp,
+                    shape = RoundedCornerShape(8.dp)
+                ) {
+                    Column(modifier = Modifier.padding(8.dp)) {
+                        Text(reportText)
+                    }
+                }
+            } else {
+                Text(
+                    "No report generated. Fill fields and tap Calculate.",
+                    modifier = Modifier.padding(8.dp)
+                )
+            }
+        }
+
+        // --- Secondary Actions: Save/Export and Clear/Exit ---
+        item {
+            Column {
+                Row(
+                    horizontalArrangement = Arrangement.spacedBy(8.dp),
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(vertical = 4.dp)
+                ) {
+                    Button(onClick = {
+                        // Save: Add report to history
+                        if (reportText.isNotBlank()) {
+                            history = history + reportText
+                        }
+                    }, modifier = Modifier.weight(1f)) { Text("💾 Save") }
+                    Button(onClick = {
+                        // Export PDF: Stub, extend as needed
+                    }, modifier = Modifier.weight(1f)) { Text("📄 Export PDF") }
+                }
+                Row(
+                    horizontalArrangement = Arrangement.spacedBy(8.dp),
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(vertical = 4.dp)
+                ) {
+                    Button(onClick = {
+                        dutyDate = LocalDate.now()
+                        fromTime = "00:00"
+                        toTime = "08:00"
+                        ceilingLimit = "43600"
+                        basicPay = "43600"
+                        daPercent = "55.0"
+                        isNationalHoliday = false
+                        isWeeklyRest = false
+                        totalDutyHours = 0.0
+                        nightDutyHours = 0.0
+                        nightAllowance = 0.0
+                        ndaAmount = 0.0
+                        reportText = ""
+                        warningText = ""
+                        leaveEntries = emptyList()
+                        newLeaveEntry = ""
+                    }, modifier = Modifier.weight(1f)) { Text("🗑️ Clear All") }
+                    Button(onClick = {
+                        // Exit: Call finish() from activity, if needed
+                    }, modifier = Modifier.weight(1f)) { Text("🚪 Exit") }
+                }
+            }
+        }
+
+        // --- Record/History List ---
+        item {
+            Divider(Modifier.padding(vertical = 8.dp))
+            Text("History", style = MaterialTheme.typography.h6, modifier = Modifier.padding(8.dp))
+
+            if (history.isEmpty()) {
+                Text("No saved reports.", modifier = Modifier.padding(8.dp))
+            } else {
+                LazyColumn {
+                    items(history) { entry ->
+                        Card(
+                            backgroundColor = Color(0xFFF5F5F5),
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .padding(vertical = 4.dp),
+                            elevation = 2.dp
+                        ) {
+                            Text(entry, modifier = Modifier.padding(8.dp))
+                        }
+                    }
+                }
+            }
+        }
+    }
+}
+
+// --- Date & Time Picker Dialogs (Compose helper functions) ---
+@Composable
+fun DatePickerDialog(show: Boolean, initialDate: LocalDate, onDateSelected: (LocalDate) -> Unit, onDismiss: () -> Unit) {
+    if (show) {
+        val context = LocalContext.current
+        LaunchedEffect(show) {
+            android.app.DatePickerDialog(
+                context,
+                { _, year, month, day ->
+                    onDateSelected(LocalDate.of(year, month + 1, day))
+                },
+                initialDate.year,
+                initialDate.monthValue - 1,
+                initialDate.dayOfMonth
+            ).apply {
+                setOnCancelListener { onDismiss() }
+            }.show()
+        }
+    }
+}
+
+@Composable
+fun TimePickerDialog(show: Boolean, initialTime: String, onTimeSelected: (String) -> Unit, onDismiss: () -> Unit) {
+    if (show) {
+        val context = LocalContext.current
+        val parsedTime = try { LocalTime.parse(initialTime) } catch (e: Exception) { LocalTime.of(0, 0) }
+        LaunchedEffect(show) {
+            android.app.TimePickerDialog(
+                context,
+                { _, hour, minute ->
+                    onTimeSelected(String.format("%02d:%02d", hour, minute))
+                },
+                parsedTime.hour,
+                parsedTime.minute,
+                true
+            ).apply {
+                setOnCancelListener { onDismiss() }
+            }.show()
+        }
+    }
+}
+
+// --- Helpers ---
+fun calculateTimeDiff(from: String, to: String): Double {
+    return try {
+        val fromT = LocalTime.parse(from)
+        val toT = LocalTime.parse(to)
+        val diff = if (toT.isAfter(fromT)) {
+            toT.toSecondOfDay() - fromT.toSecondOfDay()
+        } else {
+            (24 * 60 * 60 - fromT.toSecondOfDay()) + toT.toSecondOfDay()
+        }
+        diff / 3600.0
+    } catch (e: Exception) { 0.0 }
+}
+
+fun calculateNightDutyHours(from: String, to: String): Double {
+    val allHours = getHourlySegments(from, to)
+    return allHours.count { isNightHour(it) }.toDouble()
+}
+
+fun getHourlySegments(from: String, to: String): List<Int> {
+    return try {
+        val fromT = LocalTime.parse(from)
+        val toT = LocalTime.parse(to)
+        val hours = mutableListOf<Int>()
+        var current = fromT.hour
+        val total = (calculateTimeDiff(from, to)).toInt()
+        repeat(total) {
+            hours.add((current + it) % 24)
+        }
+        hours
+    } catch (ex: Exception) { emptyList() }
+}
+
+fun isNightHour(hour: Int): Boolean = (hour in 22..23) || (hour in 0..5)
+
+fun generateReport(
+    dutyDate: String, fromTime: String, toTime: String,
+    totalDutyHours: Double, nightDutyHours: Double, nightAllowance: Double, ndaAmount: Double,
+    basicP
