@@ -13,10 +13,11 @@ jobs:
     - name: Checkout code
       uses: actions/checkout@v4
 
-    # Convert gradlew CRLF to proper LF for Linux bash
+    # Fix Windows line endings (CRLF) to Unix LF for gradlew script
     - name: Convert gradlew to Unix line endings
       run: sed -i 's/\r$//' gradlew
 
+    # Ensure gradlew is executable
     - name: Make gradlew executable
       run: chmod +x ./gradlew
 
