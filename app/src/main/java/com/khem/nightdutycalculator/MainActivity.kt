@@ -1,5 +1,7 @@
 package com.khem.nightdutycalculator
-
+import androidx.compose.foundation.text.KeyboardOptions
+import androidx.compose.ui.text.input.KeyboardType
+import java.time.format.DateTimeFormatter
 import android.content.Context
 import android.content.Intent
 import android.os.Bundle
@@ -21,9 +23,6 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
-import androidx.compose.ui.text.input.KeyboardOptions  
-import androidx.compose.foundation.text.KeyboardOptions
-import androidx.compose.ui.text.input.KeyboardType// ✅ Corrected
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.itextpdf.text.Document
@@ -33,8 +32,8 @@ import java.io.File
 import java.io.FileOutputStream
 import java.time.LocalDate
 import java.time.LocalTime
-import java.time.format.DateTimeFormatter
-import java.time.format.DateTimeFormatter
+
+
 
 class MainActivity : ComponentActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
