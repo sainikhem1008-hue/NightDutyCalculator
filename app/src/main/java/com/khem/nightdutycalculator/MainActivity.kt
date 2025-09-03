@@ -79,7 +79,8 @@ fun NightDutyCalculatorScreen() {
     var leaveEntries by remember { mutableStateOf(listOf<String>()) }
     var showLeaveDialog by remember { mutableStateOf(false) }
     var newLeaveEntry by remember { mutableStateOf("") }
-
+    // Place this at the top of NightDutyCalculatorScreen
+    val history = remember { mutableStateListOf<String>() }
     var history by remember { mutableStateOf(listOf<String>()) }
 
     // --- Dialogs ---
@@ -387,65 +388,69 @@ fun NightDutyCalculatorScreen() {
             }
         }
 
-        // Secondary Actions: Save/Export and Clear/Exit
-        item {
-            Column {
-                Row(
-                    horizontalArrangement = Arrangement.spacedBy(8.dp),
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .padding(vertical = 4.dp)
-                ) {
-                    Button(onClick = {
-                        // Strictly in-app save to history state
-                        if (reportText.isNotBlank()) {
-                            history = history + reportText
-                        }
-                    }, modifier = Modifier.weight(1f)) { Text("💾 Save") }
-                    Button(onClick = {
-                        // Generate and export PDF with reportText
-                        if (reportText.isNotBlank()) {
-                            val pdfFile = generatePdf(context, reportText)
-                            if (pdfFile != null) {
-                                sharePdfFile(context, pdfFile)
-                            }
-                        }
-                    }, modifier = Modifier.weight(1f)) { Text("📄 Export PDF") }
+        
+
+// Secondary Actions: Save/Export and Clear/Exit
+item {
+    Column {
+        Row(
+            horizontalArrangement = Arrangement.spacedBy(8.dp),
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(vertical = 4.dp)
+        ) {
+            Button(onClick = {
+                // Strictly in-app save to history state
+                if (reportText.isNotBlank()) {
+                    history.add(reportText)
                 }
-                Row(
-                    horizontalArrangement = Arrangement.spacedBy(8.dp),
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .padding(vertical = 4.dp)
-                ) {
-                    Button(onClick = {
-                        // Clear all inputs and states
-                        dutyDate = LocalDate.now()
-                        fromTime = "00:00"
-                        toTime = "08:00"
-                        ceilingLimit = "43600"
-                        basicPay = "43600"
-                        daPercent = "55.0"
-                        isNationalHoliday = false
-                        isWeeklyRest = false
-                        totalDutyHours = 0.0
-                        nightDutyHours = 0.0
-                        nightAllowance = 0.0
-                        ndaAmount = 0.0
-                        reportText = ""
-                        warningText = ""
-                        leaveEntries = emptyList()
-                        newLeaveEntry = ""
-                    }, modifier = Modifier.weight(1f)) { Text("🗑️ Clear All") }
-                    Button(onClick = {
-                        // Exit the app/activity safely
-                        if (context is ComponentActivity) {
-                            context.finish()
-                        }
-                    }, modifier = Modifier.weight(1f)) { Text("🚪 Exit") }
+            }, modifier = Modifier.weight(1f)) { Text("💾 Save") }
+
+            Button(onClick = {
+                // Generate and export PDF with reportText
+                if (reportText.isNotBlank()) {
+                    val pdfFile = generatePdf(context, reportText)
+                    if (pdfFile != null) {
+                        sharePdfFile(context, pdfFile)
+                    }
                 }
-            }
+            }, modifier = Modifier.weight(1f)) { Text("📄 Export PDF") }
         }
+        Row(
+            horizontalArrangement = Arrangement.spacedBy(8.dp),
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(vertical = 4.dp)
+        ) {
+            Button(onClick = {
+                // Clear all inputs and states
+                dutyDate = LocalDate.now()
+                fromTime = "00:00"
+                toTime = "08:00"
+                ceilingLimit = "43600"
+                basicPay = "43600"
+                daPercent = "55.0"
+                isNationalHoliday = false
+                isWeeklyRest = false
+                totalDutyHours = 0.0
+                nightDutyHours = 0.0
+                nightAllowance = 0.0
+                ndaAmount = 0.0
+                reportText = ""
+                warningText = ""
+                leaveEntries = emptyList()
+                newLeaveEntry = ""
+            }, modifier = Modifier.weight(1f)) { Text("🗑️ Clear All") }
+
+            Button(onClick = {
+                // Exit the app/activity safely
+                if (context is ComponentActivity) {
+                    context.finish()
+                }
+            }, modifier = Modifier.weight(1f)) { Text("🚪 Exit") }
+        }
+    }
+}
 
         // Record/History List
         item {
