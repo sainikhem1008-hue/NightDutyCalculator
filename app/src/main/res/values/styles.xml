@@ -1,0 +1,7 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <!-- Our app theme -->
+    <style name="Theme.App" parent="Theme.Material3.DayNight.NoActionBar">
+        <!-- You can add colors here if needed -->
+    </style>
+</resources>
