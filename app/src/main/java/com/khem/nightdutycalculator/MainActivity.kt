@@ -1,648 +1,240 @@
 package com.khem.nightdutycalculator
-import androidx.compose.foundation.text.KeyboardOptions
-import androidx.compose.ui.text.input.KeyboardType
-import java.time.format.DateTimeFormatter
-import android.content.Context
-import android.content.Intent
-import android.os.Bundle
-import androidx.activity.ComponentActivity
-import androidx.activity.compose.setContent
-import androidx.compose.foundation.background
-import androidx.compose.foundation.layout.*
-import androidx.compose.foundation.lazy.LazyColumn
-import androidx.compose.foundation.lazy.items
-import androidx.compose.foundation.lazy.rememberLazyListState
-import androidx.compose.foundation.shape.RoundedCornerShape
-import androidx.compose.material.*
-import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.filled.DateRange
-import androidx.compose.material.icons.filled.Schedule
-import androidx.compose.runtime.*
-import androidx.compose.ui.Alignment
-import androidx.compose.ui.Modifier
-import androidx.compose.ui.graphics.Color
-import androidx.compose.ui.platform.LocalContext
-import androidx.compose.ui.text.font.FontWeight
-import androidx.compose.ui.unit.dp
-import androidx.compose.ui.unit.sp
-import com.itextpdf.text.Document
-import com.itextpdf.text.Paragraph
-import com.itextpdf.text.pdf.PdfWriter
-import java.io.File
-import java.io.FileOutputStream
-import java.time.LocalDate
-import java.time.LocalTime
+
+import android.os.Bundle import android.widget.Toast import androidx.activity.ComponentActivity import androidx.activity.compose.setContent import androidx.compose.foundation.layout.* import androidx.compose.foundation.lazy.LazyColumn import androidx.compose.foundation.lazy.items import androidx.compose.foundation.text.KeyboardOptions import androidx.compose.material3.* import androidx.compose.runtime.* import androidx.compose.ui.Alignment import androidx.compose.ui.Modifier import androidx.compose.ui.platform.LocalContext import androidx.compose.ui.text.input.KeyboardType import androidx.compose.ui.unit.dp import androidx.navigation.NavType import androidx.navigation.compose.NavHost import androidx.navigation.compose.composable import androidx.navigation.compose.rememberNavController import androidx.navigation.navArgument import androidx.room.* import kotlinx.coroutines.launch import java.time.* import java.time.format.DateTimeFormatter
+
+/**********************
+
+ROOM: ENTITIES **********************/ @Entity(tableName = "duty_table") data class DutyEntity( @PrimaryKey(autoGenerate = true) val id: Int = 0, val dutyDate: String,          // ISO yyyy-MM-dd val fromTime: String,          // HH:mm val toTime: String,            // HH:mm val totalHours: Double, val nightHours: Double, val basicPayCapped: Int, val daPercent: Double, val ndaAmount: Double )
 
 
+@Entity(tableName = "leave_table") data class LeaveEntity( @PrimaryKey(autoGenerate = true) val id: Int = 0, val leaveType: String, val startDate: String,         // ISO yyyy-MM-dd val endDate: String            // ISO yyyy-MM-dd )
 
-class MainActivity : ComponentActivity() {
-    override fun onCreate(savedInstanceState: Bundle?) {
-        super.onCreate(savedInstanceState)
-        setContent { NightDutyCalculatorApp() }
-    }
+/**********************
+
+ROOM: DAOs **********************/ @Dao interface DutyDao { @Insert(onConflict = OnConflictStrategy.REPLACE) suspend fun insert(duty: DutyEntity): Long
+
+@Update suspend fun update(duty: DutyEntity)
+
+@Query("SELECT * FROM duty_table ORDER BY dutyDate DESC, id DESC") suspend fun getAll(): List<DutyEntity>
+
+@Query("SELECT * FROM duty_table WHERE id = :id") suspend fun getById(id: Int): DutyEntity?
+
+@Delete suspend fun delete(duty: DutyEntity) }
+
+
+@Dao interface LeaveDao { @Insert(onConflict = OnConflictStrategy.REPLACE) suspend fun insert(leave: LeaveEntity): Long
+
+@Update
+suspend fun update(leave: LeaveEntity)
+
+@Query("SELECT * FROM leave_table ORDER BY startDate DESC, id DESC")
+suspend fun getAll(): List<LeaveEntity>
+
+@Query("SELECT * FROM leave_table WHERE id = :id")
+suspend fun getById(id: Int): LeaveEntity?
+
+@Delete
+suspend fun delete(leave: LeaveEntity)
+
 }
 
-@Composable
-fun NightDutyCalculatorApp() {
-    MaterialTheme {
-        Surface(modifier = Modifier.fillMaxSize(), color = Color(0xFFF5F5F5)) {
-            NightDutyCalculatorScreen()
-        }
-    }
+/**********************
+
+ROOM: DATABASE **********************/ @Database(entities = [DutyEntity::class, LeaveEntity::class], version = 2, exportSchema = false) abstract class AppDatabase : RoomDatabase() { abstract fun dutyDao(): DutyDao abstract fun leaveDao(): LeaveDao
+
+companion object { @Volatile private var INSTANCE: AppDatabase? = null fun getInstance(context: android.content.Context): AppDatabase = INSTANCE ?: synchronized(this) { Room.databaseBuilder(context.applicationContext, AppDatabase::class.java, "nda_db") .fallbackToDestructiveMigration() .build().also { INSTANCE = it } } } }
+
+
+/**********************
+
+ACTIVITY **********************/ class MainActivity : ComponentActivity() { override fun onCreate(savedInstanceState: Bundle?) { super.onCreate(savedInstanceState) val db = AppDatabase.getInstance(this) setContent { MaterialTheme { val nav = rememberNavController() NavHost(navController = nav, startDestination = "home") { composable("home") { HomeScreen(nav, db) } composable("leave") { LeaveScreen(nav, db, editId = null) } composable("history") { HistoryScreen(nav, db) } composable( route = "editDuty/{id}", arguments = listOf(navArgument("id") { type = NavType.IntType }) ) { backStackEntry -> val id = backStackEntry.arguments?.getInt("id")!! EditDutyScreen(nav, db, id) } composable( route = "editLeave/{id}", arguments = listOf(navArgument("id") { type = NavType.IntType }) ) { backStackEntry -> val id = backStackEntry.arguments?.getInt("id")!! LeaveScreen(nav, db, editId = id) } } } } } }
+
+
+/**********************
+
+BUSINESS HELPERS **********************/ private val ISO_DATE: DateTimeFormatter = DateTimeFormatter.ISO_DATE
+
+
+private fun parseTime(s: String): LocalTime = try { LocalTime.parse(s) } catch (: Exception) { LocalTime.MIDNIGHT } private fun parseDate(s: String): LocalDate = try { LocalDate.parse(s, ISO_DATE) } catch (: Exception) { LocalDate.now() }
+
+// Total hours between from..to, allowing overnight (spanning midnight) private fun totalHours(from: String, to: String): Double { val f = parseTime(from) val t = parseTime(to) val end = if (!t.isBefore(f)) t else t.plusHours(24) return java.time.Duration.between(f, end).toMinutes().toDouble() / 60.0 }
+
+// Night hours as overlap between duty interval and [22:00, 06:00] over possible 2-day span private fun nightHoursBetween(from: String, to: String): Double { val start = parseTime(from) val rawEnd = parseTime(to) val end = if (!rawEnd.isBefore(start)) rawEnd else rawEnd.plusHours(24)
+
+// windows: [22:00, 30:00] == 22:00..(06:00 next day)
+val nightStart = LocalTime.of(22, 0)
+val nightEnd = LocalTime.of(6, 0).plusHours(24) // 30:00
+
+val dutyStartMin = 0L
+val dutyEndMin = java.time.Duration.between(start, end).toMinutes()
+
+val nsMin = java.time.Duration.between(start, nightStart).toMinutes().coerceAtLeast(0)
+val neMin = java.time.Duration.between(start, nightEnd).toMinutes()
+
+val overlapStart = nsMin.coerceAtLeast(0)
+val overlapEnd = neMin.coerceAtMost(dutyEndMin)
+val overlap = (overlapEnd - overlapStart).coerceAtLeast(0)
+
+return overlap.toDouble() / 60.0
+
 }
 
-@Composable
-fun NightDutyCalculatorScreen() {
-    val context = LocalContext.current
+private fun computeNdaAmount(basicPayInput: Int, daPercent: Double, nightHrs: Double): Pair<Int, Double> { val capped = if (basicPayInput > 43600) 43600 else basicPayInput val daValue = capped * (daPercent / 100.0) val hourlyRate = (capped + daValue) / 200.0 val nda = hourlyRate * (nightHrs / 6.0) return capped to nda }
 
-    val scrollState = rememberLazyListState()
+private suspend fun isDateWithinAnyLeave(db: AppDatabase, dutyDateIso: String): Boolean { val date = parseDate(dutyDateIso) val leaves = db.leaveDao().getAll() return leaves.any { leave -> val s = parseDate(leave.startDate) val e = parseDate(leave.endDate) !date.isBefore(s) && !date.isAfter(e) } }
 
-    var dutyDate by remember { mutableStateOf(LocalDate.now()) }
-    var showDatePicker by remember { mutableStateOf(false) }
+/**********************
 
-    var fromTime by remember { mutableStateOf("00:00") }
-    var toTime by remember { mutableStateOf("08:00") }
-    var showFromTimePicker by remember { mutableStateOf(false) }
-    var showToTimePicker by remember { mutableStateOf(false) }
+HOME (Calculator) SCREEN **********************/ @OptIn(ExperimentalMaterial3Api::class) @Composable fun HomeScreen(nav: androidx.navigation.NavController, db: AppDatabase) { val ctx = LocalContext.current val scope = rememberCoroutineScope()
 
-    var ceilingLimit by remember { mutableStateOf("43600") }
-    var basicPay by remember { mutableStateOf("43600") }
-    var daPercent by remember { mutableStateOf("55.0") }
-    var isNationalHoliday by remember { mutableStateOf(false) }
-    var isWeeklyRest by remember { mutableStateOf(false) }
+var dutyDate by remember { mutableStateOf(LocalDate.now().format(ISO_DATE)) } var fromTime by remember { mutableStateOf("22:00") } var toTime by remember { mutableStateOf("06:00") } var basicPay by remember { mutableStateOf("43600") } var daPercent by remember { mutableStateOf("55.0") }
 
-    var totalDutyHours by remember { mutableStateOf(0.0) }
-    var nightDutyHours by remember { mutableStateOf(0.0) }
-    var nightAllowance by remember { mutableStateOf(0.0) }
-    var ndaAmount by remember { mutableStateOf(0.0) }
-    var reportText by remember { mutableStateOf("") }
-    var warningText by remember { mutableStateOf("") }
+var calcPreview by remember { mutableStateOf("") }
 
-    var leaveEntries by remember { mutableStateOf(listOf<String>()) }
-    var showLeaveDialog by remember { mutableStateOf(false) }
-    var newLeaveEntry by remember { mutableStateOf("") }
+fun refreshPreview() { val total = totalHours(fromTime, toTime) val night = nightHoursBetween(fromTime, toTime) val cappedAndNda = computeNdaAmount(basicPay.toIntOrNull() ?: 0, daPercent.toDoubleOrNull() ?: 0.0, night) calcPreview = "Total: %.2f h, Night: %.2f h, Basic(capped): %d, NDA: ₹%.2f".format(total, night, cappedAndNda.first, cappedAndNda.second) }
 
-    var history by remember { mutableStateOf(listOf<String>()) }
+LaunchedEffect(fromTime, toTime, basicPay, daPercent) { refreshPreview() }
 
-    // --- Dialogs ---
+Scaffold( topBar = { CenterAlignedTopAppBar( title = { Text("Night Duty Calculator") }, actions = { TextButton(onClick = { nav.navigate("leave") }) { Text("Leave") } TextButton(onClick = { nav.navigate("history") }) { Text("History") } } ) } ) { padding -> Column(Modifier.padding(padding).padding(16.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) { OutlinedTextField( value = dutyDate, onValueChange = { dutyDate = it }, label = { Text("Duty Date (YYYY-MM-DD)") }, singleLine = true, modifier = Modifier.fillMaxWidth() ) Row(horizontalArrangement = Arrangement.spacedBy(8.dp), modifier = Modifier.fillMaxWidth()) { OutlinedTextField( value = fromTime, onValueChange = { fromTime = it }, label = { Text("From (HH:mm)") }, singleLine = true, modifier = Modifier.weight(1f) ) OutlinedTextField( value = toTime, onValueChange = { toTime = it }, label = { Text("To (HH:mm)") }, singleLine = true, modifier = Modifier.weight(1f) ) } Row(horizontalArrangement = Arrangement.spacedBy(8.dp), modifier = Modifier.fillMaxWidth()) { OutlinedTextField( value = basicPay, onValueChange = { basicPay = it.filter { ch -> ch.isDigit() } }, label = { Text("Basic Pay (≤ 43600)") }, keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number), singleLine = true, modifier = Modifier.weight(1f) ) OutlinedTextField( value = daPercent, onValueChange = { daPercent = it.replace(',', '.').filter { ch -> ch.isDigit() || ch == '.' } }, label = { Text("DA %") }, keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Decimal), singleLine = true, modifier = Modifier.weight(1f) ) }
 
-    DatePickerDialog(
-        show = showDatePicker,
-        initialDate = dutyDate,
-        onDateSelected = {
-            dutyDate = it
-            showDatePicker = false
-        },
-        onDismiss = { showDatePicker = false }
-    )
-    TimePickerDialog(
-        show = showFromTimePicker,
-        initialTime = fromTime,
-        onTimeSelected = {
-            fromTime = it
-            showFromTimePicker = false
-        },
-        onDismiss = { showFromTimePicker = false }
-    )
-    TimePickerDialog(
-        show = showToTimePicker,
-        initialTime = toTime,
-        onTimeSelected = {
-            toTime = it
-            showToTimePicker = false
-        },
-        onDismiss = { showToTimePicker = false }
-    )
+Text(text = calcPreview, style = MaterialTheme.typography.bodyMedium)
 
-    if (showLeaveDialog) {
-        AlertDialog(
-            onDismissRequest = { showLeaveDialog = false },
-            title = { Text("Leave Management", fontWeight = FontWeight.Bold) },
-            text = {
-                Column {
-                    OutlinedTextField(
-                        value = newLeaveEntry,
-                        onValueChange = { newLeaveEntry = it },
-                        label = { Text("Add Leave Note") },
-                        singleLine = true
-                    )
-                    Spacer(Modifier.height(8.dp))
-                    Button(onClick = {
-                        if (newLeaveEntry.isNotBlank()) {
-                            leaveEntries = leaveEntries + newLeaveEntry
-                            newLeaveEntry = ""
-                        }
-                    }) { Text("Add") }
-                    Spacer(Modifier.height(8.dp))
-                    Text("Current Leaves", fontWeight = FontWeight.Bold)
-                    leaveEntries.forEachIndexed { index, entry ->
-                        Row(
-                            Modifier.fillMaxWidth(),
-                            horizontalArrangement = Arrangement.SpaceBetween
-                        ) {
-                            Text(entry)
-                            IconButton(onClick = {
-                                leaveEntries = leaveEntries.filterIndexed { i, _ -> i != index }
-                            }) {
-                                Icon(Icons.Filled.Schedule, contentDescription = "Remove")
-                            }
-                        }
-                    }
-                }
-            },
-            confirmButton = {
-                Button(onClick = { showLeaveDialog = false }) { Text("Close") }
-            }
-        )
-    }
+     Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+         Button(onClick = {
+             // Save (with rules: cap basic; skip if on leave)
+             scope.launch {
+                 val total = totalHours(fromTime, toTime)
+                 val night = nightHoursBetween(fromTime, toTime)
+                 val (capped, nda) = computeNdaAmount(basicPay.toIntOrNull() ?: 0, daPercent.toDoubleOrNull() ?: 0.0, night)
 
-    // --- Layout ---
+                 val inLeave = isDateWithinAnyLeave(db, dutyDate)
+                 if (inLeave) {
+                     Toast.makeText(ctx, "No NDA: date is within leave period", Toast.LENGTH_LONG).show()
+                     return@launch
+                 }
 
-    LazyColumn(
-        modifier = Modifier
-            .fillMaxSize()
-            .background(Color.White)
-            .padding(horizontal = 12.dp),
-        state = scrollState
-    ) {
+                 val entity = DutyEntity(
+                     dutyDate = dutyDate,
+                     fromTime = fromTime,
+                     toTime = toTime,
+                     totalHours = total,
+                     nightHours = night,
+                     basicPayCapped = capped,
+                     daPercent = daPercent.toDoubleOrNull() ?: 0.0,
+                     ndaAmount = nda
+                 )
+                 db.dutyDao().insert(entity)
+                 Toast.makeText(ctx, "Saved", Toast.LENGTH_SHORT).show()
+             }
+         }) { Text("Save") }
 
-        // Header Card
-        item {
-            Card(
-                backgroundColor = Color(0xFF1976D2),
-                shape = RoundedCornerShape(12.dp),
-                elevation = 8.dp,
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .padding(vertical = 16.dp)
-            ) {
-                Column(Modifier.padding(24.dp)) {
-                    Text(
-                        "🌙 Night Duty Calculator",
-                        fontSize = 22.sp,
-                        color = Color.White,
-                        fontWeight = FontWeight.Bold
-                    )
-                    Text(
-                        "Calculate and track your allowances",
-                        fontSize = 14.sp,
-                        color = Color.White
-                    )
-                }
-            }
-        }
+         OutlinedButton(onClick = { // Reset
+             dutyDate = LocalDate.now().format(ISO_DATE)
+             fromTime = "22:00"; toTime = "06:00"; basicPay = "43600"; daPercent = "55.0"; refreshPreview()
+         }) { Text("Clear") }
+     }
+ }
 
-        // Input Fields
-        item {
-            OutlinedTextField(
-                value = dutyDate.format(DateTimeFormatter.ISO_DATE),
-                onValueChange = {},
-                label = { Text("Duty Date") },
-                readOnly = true,
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .padding(vertical = 4.dp),
-                colors = TextFieldDefaults.textFieldColors(
-                    backgroundColor = Color(0xFFE3F2FD)
-                ),
-                trailingIcon = {
-                    IconButton(onClick = { showDatePicker = true }) {
-                        Icon(Icons.Filled.DateRange, contentDescription = "Pick Date")
-                    }
-                }
-            )
-            Spacer(Modifier.height(4.dp))
-        }
-        item {
-            Row(
-                verticalAlignment = Alignment.CenterVertically,
-                modifier = Modifier.fillMaxWidth()
-            ) {
-                OutlinedTextField(
-                    value = fromTime,
-                    onValueChange = { fromTime = it },
-                    label = { Text("From Time (HH:mm)") },
-                    modifier = Modifier
-                        .weight(1f)
-                        .padding(end = 4.dp),
-                    keyboardOptions = KeyboardOptions.Default,
-                    colors = TextFieldDefaults.textFieldColors(
-                        backgroundColor = Color(0xFFE3F2FD)
-                    ),
-                    trailingIcon = {
-                        IconButton(onClick = { showFromTimePicker = true }) {
-                            Icon(Icons.Filled.Schedule, contentDescription = "Pick From Time")
-                        }
-                    }
-                )
-                OutlinedTextField(
-                    value = toTime,
-                    onValueChange = { toTime = it },
-                    label = { Text("To Time (HH:mm)") },
-                    modifier = Modifier
-                        .weight(1f)
-                        .padding(start = 4.dp),
-                    keyboardOptions = KeyboardOptions.Default,
-                    colors = TextFieldDefaults.textFieldColors(
-                        backgroundColor = Color(0xFFE3F2FD)
-                    ),
-                    trailingIcon = {
-                        IconButton(onClick = { showToTimePicker = true }) {
-                            Icon(Icons.Filled.Schedule, contentDescription = "Pick To Time")
-                        }
-                    }
-                )
-            }
-            Spacer(Modifier.height(4.dp))
-        }
-        item {
-            OutlinedTextField(
-                value = ceilingLimit,
-                onValueChange = { ceilingLimit = it },
-                label = { Text("Ceiling Limit (\u20B9)") },
-                keyboardOptions = KeyboardOptions.Default,
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .padding(vertical = 4.dp)
-            )
-        }
-        item {
-            OutlinedTextField(
-                value = basicPay,
-                onValueChange = { basicPay = it },
-                label = { Text("Basic Pay (\u20B9)") },
-                keyboardOptions = KeyboardOptions.Default,
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .padding(vertical = 4.dp)
-            )
-        }
-        item {
-            OutlinedTextField(
-                value = daPercent,
-                onValueChange = { daPercent = it },
-                label = { Text("Dearness Allowance (%)") },
-                keyboardOptions = KeyboardOptions.Default,
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .padding(vertical = 4.dp)
-            )
-        }
-        item {
-            Row(
-                verticalAlignment = Alignment.CenterVertically,
-                modifier = Modifier.padding(vertical = 8.dp)
-            ) {
-                Checkbox(checked = isNationalHoliday, onCheckedChange = { isNationalHoliday = it })
-                Text("National Holiday", modifier = Modifier.padding(start = 4.dp))
-                Spacer(Modifier.width(24.dp))
-                Checkbox(checked = isWeeklyRest, onCheckedChange = { isWeeklyRest = it })
-                Text("Weekly Rest", modifier = Modifier.padding(start = 4.dp))
-            }
-        }
+} }
 
-        // Major Action Buttons
-        item {
-            Row(
-                horizontalArrangement = Arrangement.spacedBy(8.dp),
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .padding(vertical = 8.dp)
-            ) {
-                Button(
-                    onClick = {
-                        totalDutyHours = calculateTimeDiff(fromTime, toTime)
-                        nightDutyHours = calculateNightDutyHours(fromTime, toTime)
-                        val pay = basicPay.toDoubleOrNull() ?: 0.0
-                        val daPerc = daPercent.toDoubleOrNull() ?: 0.0
-                        val daValue = pay * daPerc / 100.0
-                        ndaAmount = ((pay + daValue) / 200.0) * (nightDutyHours / 6.0)
-                        nightAllowance = ndaAmount
 
-                        reportText = generateReport(
-                            dutyDate = dutyDate.format(DateTimeFormatter.ISO_DATE),
-                            fromTime = fromTime,
-                            toTime = toTime,
-                            totalDutyHours = totalDutyHours,
-                            nightDutyHours = nightDutyHours,
-                            nightAllowance = nightAllowance,
-                            ndaAmount = ndaAmount,
-                            basicPay = pay,
-                            daPercent = daPercent,
-                            ceilingLimit = ceilingLimit,
-                            isNationalHoliday = isNationalHoliday,
-                            isWeeklyRest = isWeeklyRest,
-                            leaveEntries = leaveEntries
-                        )
+/**********************
 
-                        warningText =
-                            if (pay > (ceilingLimit.toDoubleOrNull() ?: pay))
-                                "Basic Pay exceeds ceiling limit! No NDA applicable."
-                            else
-                                ""
-                    },
-                    modifier = Modifier.weight(1f)
-                ) { Text("🧮 Calculate Allowance") }
-                Button(
-                    onClick = { showLeaveDialog = true },
-                    modifier = Modifier.weight(1f)
-                ) { Text("📅 Leave Management") }
-            }
-        }
+LEAVE SCREEN (create / edit) **********************/ @OptIn(ExperimentalMaterial3Api::class) @Composable fun LeaveScreen(nav: androidx.navigation.NavController, db: AppDatabase, editId: Int?) { val ctx = LocalContext.current val scope = rememberCoroutineScope()
 
-        // Results and Warning Banner
-        item {
-            if (warningText.isNotEmpty()) {
-                Card(
-                    backgroundColor = Color(0xFFFF9800),
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .padding(vertical = 8.dp)
-                ) {
-                    Text(
-                        text = warningText,
-                        color = Color.White,
-                        fontWeight = FontWeight.Bold,
-                        modifier = Modifier.padding(12.dp)
-                    )
-                }
-            }
+var leaveType by remember { mutableStateOf("Casual Leave") } var startDate by remember { mutableStateOf(LocalDate.now().format(ISO_DATE)) } var endDate by remember { mutableStateOf(LocalDate.now().plusDays(1).format(ISO_DATE)) }
 
-            if (reportText.isNotEmpty()) {
-                Card(
-                    backgroundColor = Color(0xFFE0E0E0),
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .padding(vertical = 8.dp),
-                    elevation = 4.dp,
-                    shape = RoundedCornerShape(8.dp)
-                ) {
-                    Column(modifier = Modifier.padding(8.dp)) {
-                        Text(reportText)
-                    }
-                }
-            } else {
-                Text(
-                    "No report generated. Fill fields and tap Calculate.",
-                    modifier = Modifier.padding(8.dp)
-                )
-            }
-        }
+// Load existing when editing LaunchedEffect(editId) { if (editId != null) { db.leaveDao().getById(editId)?.let { e -> leaveType = e.leaveType startDate = e.startDate endDate = e.endDate } } }
 
-        // Secondary Actions: Save/Export and Clear/Exit
-        item {
-            Column {
-                Row(
-                    horizontalArrangement = Arrangement.spacedBy(8.dp),
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .padding(vertical = 4.dp)
-                ) {
-                    Button(onClick = {
-                        // Save report text to internal storage file
-                        if (reportText.isNotBlank()) {
-                            saveReportToFile(context, reportText)
-                            // Add to history state
-                            history = history + reportText
-                        }
-                    }, modifier = Modifier.weight(1f)) { Text("💾 Save") }
-                    Button(onClick = {
-                        // Generate and export PDF with reportText
-                        if (reportText.isNotBlank()) {
-                            val pdfFile = generatePdf(context, reportText)
-                            if (pdfFile != null) {
-                                sharePdfFile(context, pdfFile)
-                            }
-                        }
-                    }, modifier = Modifier.weight(1f)) { Text("📄 Export PDF") }
-                }
-                Row(
-                    horizontalArrangement = Arrangement.spacedBy(8.dp),
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .padding(vertical = 4.dp)
-                ) {
-                    Button(onClick = {
-                        // Clear all inputs and states
-                        dutyDate = LocalDate.now()
-                        fromTime = "00:00"
-                        toTime = "08:00"
-                        ceilingLimit = "43600"
-                        basicPay = "43600"
-                        daPercent = "55.0"
-                        isNationalHoliday = false
-                        isWeeklyRest = false
-                        totalDutyHours = 0.0
-                        nightDutyHours = 0.0
-                        nightAllowance = 0.0
-                        ndaAmount = 0.0
-                        reportText = ""
-                        warningText = ""
-                        leaveEntries = emptyList()
-                        newLeaveEntry = ""
-                    }, modifier = Modifier.weight(1f)) { Text("🗑️ Clear All") }
-                    Button(onClick = {
-                        // Exit the app/activity safely
-                        if (context is ComponentActivity) {
-                            context.finish()
-                        }
-                    }, modifier = Modifier.weight(1f)) { Text("🚪 Exit") }
-                }
-            }
-        }
+Scaffold( topBar = { CenterAlignedTopAppBar(title = { Text(if (editId == null) "Leave Management" else "Edit Leave") }) } ) { padding -> Column(Modifier.padding(padding).padding(16.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) { var expanded by remember { mutableStateOf(false) } ExposedDropdownMenuBox(expanded = expanded, onExpandedChange = { expanded = !expanded }) { OutlinedTextField( value = leaveType, onValueChange = {}, readOnly = true, label = { Text("Leave Type") }, modifier = Modifier.menuAnchor().fillMaxWidth() ) ExposedDropdownMenu(expanded = expanded, onDismissRequest = { expanded = false }) { listOf("Casual Leave", "Sick Leave", "Earned Leave", "Other").forEach { opt -> DropdownMenuItem(text = { Text(opt) }, onClick = { leaveType = opt; expanded = false }) } } }
 
-        // Record/History List
-        item {
-            Divider(Modifier.padding(vertical = 8.dp))
-            Text("History", style = MaterialTheme.typography.h6, modifier = Modifier.padding(8.dp))
+OutlinedTextField(
+         value = startDate,
+         onValueChange = { startDate = it },
+         label = { Text("Start Date (YYYY-MM-DD)") },
+         singleLine = true,
+         modifier = Modifier.fillMaxWidth()
+     )
+     OutlinedTextField(
+         value = endDate,
+         onValueChange = { endDate = it },
+         label = { Text("End Date (YYYY-MM-DD)") },
+         singleLine = true,
+         modifier = Modifier.fillMaxWidth()
+     )
 
-            if (history.isEmpty()) {
-                Text("No saved reports.", modifier = Modifier.padding(8.dp))
-            } else {
-                LazyColumn {
-                    items(history) { entry ->
-                        Card(
-                            backgroundColor = Color(0xFFF5F5F5),
-                            modifier = Modifier
-                                .fillMaxWidth()
-                                .padding(vertical = 4.dp),
-                            elevation = 2.dp
-                        ) {
-                            Text(entry, modifier = Modifier.padding(8.dp))
-                        }
-                    }
-                }
-            }
-        }
-    }
-}
+     Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+         Button(onClick = {
+             scope.launch {
+                 val entity = LeaveEntity(id = editId ?: 0, leaveType = leaveType, startDate = startDate, endDate = endDate)
+                 if (editId == null) db.leaveDao().insert(entity) else db.leaveDao().update(entity)
+                 Toast.makeText(ctx, "Saved", Toast.LENGTH_SHORT).show()
+                 nav.popBackStack()
+             }
+         }) { Text("Save") }
 
-// Date & Time Picker Dialogs (Compose helper functions)
-@Composable
-fun DatePickerDialog(
-    show: Boolean,
-    initialDate: LocalDate,
-    onDateSelected: (LocalDate) -> Unit,
-    onDismiss: () -> Unit
-) {
-    if (show) {
-        val context = LocalContext.current
-        LaunchedEffect(show) {
-            android.app.DatePickerDialog(
-                context,
-                { _, year, month, day ->
-                    onDateSelected(LocalDate.of(year, month + 1, day))
-                },
-                initialDate.year,
-                initialDate.monthValue - 1,
-                initialDate.dayOfMonth
-            ).apply {
-                setOnCancelListener { onDismiss() }
-            }.show()
-        }
-    }
-}
+         OutlinedButton(onClick = { nav.popBackStack() }) { Text("Cancel") }
+     }
+ }
 
-@Composable
-fun TimePickerDialog(
-    show: Boolean,
-    initialTime: String,
-    onTimeSelected: (String) -> Unit,
-    onDismiss: () -> Unit
-) {
-    if (show) {
-        val context = LocalContext.current
-        val parsedTime = try { LocalTime.parse(initialTime) } catch (e: Exception) { LocalTime.of(0, 0) }
-        LaunchedEffect(show) {
-            android.app.TimePickerDialog(
-                context,
-                { _, hour, minute ->
-                    onTimeSelected(String.format("%02d:%02d", hour, minute))
-                },
-                parsedTime.hour,
-                parsedTime.minute,
-                true
-            ).apply {
-                setOnCancelListener { onDismiss() }
-            }.show()
-        }
-    }
-}
+} }
 
-// Time Calculation Helpers
-fun calculateTimeDiff(from: String, to: String): Double {
-    return try {
-        val fromT = LocalTime.parse(from)
-        val toT = LocalTime.parse(to)
-        val diff = if (toT.isAfter(fromT)) {
-            toT.toSecondOfDay() - fromT.toSecondOfDay()
-        } else {
-            (24 * 60 * 60 - fromT.toSecondOfDay()) + toT.toSecondOfDay()
-        }
-        diff / 3600.0
-    } catch (e: Exception) { 0.0 }
-}
 
-fun calculateNightDutyHours(from: String, to: String): Double {
-    val allHours = getHourlySegments(from, to)
-    return allHours.count { isNightHour(it) }.toDouble()
-}
+/**********************
 
-fun getHourlySegments(from: String, to: String): List<Int> {
-    return try {
-        val fromT = LocalTime.parse(from)
-        val toT = LocalTime.parse(to)
-        val hours = mutableListOf<Int>()
-        var current = fromT.hour
-        val total = (calculateTimeDiff(from, to)).toInt()
-        repeat(total) {
-            hours.add((current + it) % 24)
-        }
-        hours
-    } catch (ex: Exception) { emptyList() }
-}
+HISTORY SCREEN (tabs + edit/delete) **********************/ @Composable fun HistoryScreen(nav: androidx.navigation.NavController, db: AppDatabase) { val scope = rememberCoroutineScope() val ctx = LocalContext.current
 
-fun isNightHour(hour: Int): Boolean = (hour in 22..23) || (hour in 0..5)
+var tab by remember { mutableStateOf(0) } // 0 = Duty, 1 = Leave var duties by remember { mutableStateOf(listOf<DutyEntity>()) } var leaves by remember { mutableStateOf(listOf<LeaveEntity>()) }
 
-// Report Generator Function
-fun generateReport(
-    dutyDate: String,
-    fromTime: String,
-    toTime: String,
-    totalDutyHours: Double,
-    nightDutyHours: Double,
-    nightAllowance: Double,
-    ndaAmount: Double,
-    basicPay: Double,
-    daPercent: String,
-    ceilingLimit: String,
-    isNationalHoliday: Boolean,
-    isWeeklyRest: Boolean,
-    leaveEntries: List<String>
-): String {
-    val builder = StringBuilder()
-    builder.appendLine("Night Duty Allowance Report")
-    builder.appendLine("Date: $dutyDate")
-    builder.appendLine("Time: $fromTime to $toTime")
-    builder.appendLine("Total Duty Hours: %.2f".format(totalDutyHours))
-    builder.appendLine("Night Duty Hours: %.2f".format(nightDutyHours))
-    builder.appendLine("Basic Pay: ₹%.2f".format(basicPay))
-    builder.appendLine("Dearness Allowance: $daPercent%")
-    builder.appendLine("Ceiling Limit: ₹$ceilingLimit")
-    builder.appendLine("National Holiday: ${if (isNationalHoliday) "Yes" else "No"}")
-    builder.appendLine("Weekly Rest: ${if (isWeeklyRest) "Yes" else "No"}")
-    builder.appendLine("Night Allowance: ₹%.2f".format(nightAllowance))
-    builder.appendLine()
-    if (leaveEntries.isNotEmpty()) {
-        builder.appendLine("Leave Notes:")
-        leaveEntries.forEach { builder.appendLine("- $it") }
-    }
-    return builder.toString()
-}
+LaunchedEffect(tab) { scope.launch { duties = db.dutyDao().getAll() } scope.launch { leaves = db.leaveDao().getAll() } }
 
-// Save report text to internal storage
-fun saveReportToFile(context: Context, report: String) {
-    try {
-        val fileName = "night_duty_report_${System.currentTimeMillis()}.txt"
-        context.openFileOutput(fileName, Context.MODE_PRIVATE).use { fos ->
-            fos.write(report.toByteArray())
-        }
-    } catch (ex: Exception) {
-        ex.printStackTrace()
-    }
-}
+Scaffold(topBar = { CenterAlignedTopAppBar(title = { Text("History") }) }) { padding -> Column(Modifier.padding(padding)) { TabRow(selectedTabIndex = tab) { Tab(selected = tab == 0, onClick = { tab = 0; scope.launch { duties = db.dutyDao().getAll() } }, text = { Text("Duty History") }) Tab(selected = tab == 1, onClick = { tab = 1; scope.launch { leaves = db.leaveDao().getAll() } }, text = { Text("Leave History") }) } when (tab) { 0 -> DutyList(duties, onEdit = { nav.navigate("editDuty/${it.id}") }, onDelete = { entity -> scope.launch { db.dutyDao().delete(entity) duties = db.dutyDao().getAll() Toast.makeText(ctx, "Deleted", Toast.LENGTH_SHORT).show() } } ) 1 -> LeaveList(leaves, onEdit = { nav.navigate("editLeave/${it.id}") }, onDelete = { entity -> scope.launch { db.leaveDao().delete(entity) leaves = db.leaveDao().getAll() Toast.makeText(ctx, "Deleted", Toast.LENGTH_SHORT).show() } } ) } } } }
 
-// Generate PDF from report text, save file, return file reference
-fun generatePdf(context: Context, text: String): File? {
-    return try {
-        val document = Document()
-        val fileName = "night_duty_report_${System.currentTimeMillis()}.pdf"
-        val file = File(context.filesDir, fileName)
-        PdfWriter.getInstance(document, FileOutputStream(file))
-        document.open()
-        document.add(Paragraph(text))
-        document.close()
-        file
-    } catch (ex: Exception) {
-        ex.printStackTrace()
-        null
-    }
-}
 
-// Share the generated PDF file using Android share intent
-fun sharePdfFile(context: Context, file: File) {
-    val uri = androidx.core.content.FileProvider.getUriForFile(
-        context,
-        context.packageName + ".fileprovider",
-        file
-    )
-    val intent = Intent(Intent.ACTION_SEND).apply {
-        type = "application/pdf"
-        putExtra(Intent.EXTRA_STREAM, uri)
-        addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)
-    }
-    context.startActivity(
-        Intent.createChooser(intent, "Share PDF")
-            .addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
-    )
-}
+@Composable private fun DutyList(data: List<DutyEntity>, onEdit: (DutyEntity) -> Unit, onDelete: (DutyEntity) -> Unit) { if (data.isEmpty()) { Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) { Text("No duty records") } return } LazyColumn(contentPadding = PaddingValues(12.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) { items(data) { d -> ElevatedCard(Modifier.fillMaxWidth()) { Column(Modifier.padding(12.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) { Text("${d.dutyDate}  ${d.fromTime}→${d.toTime}") Text("Total: %.2f h  Night: %.2f h".format(d.totalHours, d.nightHours), style = MaterialTheme.typography.bodySmall) Text("Basic(capped): ${d.basicPayCapped}  DA%: ${"%.1f".format(d.daPercent)}  NDA: ₹${"%.2f".format(d.ndaAmount)}", style = MaterialTheme.typography.bodySmall) Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) { OutlinedButton(onClick = { onEdit(d) }) { Text("Edit") } OutlinedButton(onClick = { onDelete(d) }) { Text("Delete") } } } } } } }
+
+@Composable private fun LeaveList(data: List<LeaveEntity>, onEdit: (LeaveEntity) -> Unit, onDelete: (LeaveEntity) -> Unit) { if (data.isEmpty()) { Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) { Text("No leave records") } return } LazyColumn(contentPadding = PaddingValues(12.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) { items(data) { l -> ElevatedCard(Modifier.fillMaxWidth()) { Column(Modifier.padding(12.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) { Text("${l.leaveType}") Text("${l.startDate} → ${l.endDate}", style = MaterialTheme.typography.bodySmall) Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) { OutlinedButton(onClick = { onEdit(l) }) { Text("Edit") } OutlinedButton(onClick = { onDelete(l) }) { Text("Delete") } } } } } } }
+
+/**********************
+
+EDIT DUTY SCREEN (prefilled) **********************/ @OptIn(ExperimentalMaterial3Api::class) @Composable fun EditDutyScreen(nav: androidx.navigation.NavController, db: AppDatabase, id: Int) { val ctx = LocalContext.current val scope = rememberCoroutineScope()
+
+var entity by remember { mutableStateOf<DutyEntity?>(null) }
+
+var dutyDate by remember { mutableStateOf("") } var fromTime by remember { mutableStateOf("") } var toTime by remember { mutableStateOf("") } var basicPay by remember { mutableStateOf("") } var daPercent by remember { mutableStateOf("") }
+
+LaunchedEffect(id) { val loaded = db.dutyDao().getById(id) entity = loaded loaded?.let { e -> dutyDate = e.dutyDate fromTime = e.fromTime toTime = e.toTime basicPay = e.basicPayCapped.toString() daPercent = e.daPercent.toString() } }
+
+Scaffold(topBar = { CenterAlignedTopAppBar(title = { Text("Edit Duty") }) }) { padding -> Column(Modifier.padding(padding).padding(16.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) { OutlinedTextField(value = dutyDate, onValueChange = { dutyDate = it }, label = { Text("Duty Date (YYYY-MM-DD)") }, singleLine = true, modifier = Modifier.fillMaxWidth()) Row(horizontalArrangement = Arrangement.spacedBy(8.dp), modifier = Modifier.fillMaxWidth()) { OutlinedTextField(value = fromTime, onValueChange = { fromTime = it }, label = { Text("From (HH:mm)") }, singleLine = true, modifier = Modifier.weight(1f)) OutlinedTextField(value = toTime, onValueChange = { toTime = it }, label = { Text("To (HH:mm)") }, singleLine = true, modifier = Modifier.weight(1f)) } Row(horizontalArrangement = Arrangement.spacedBy(8.dp), modifier = Modifier.fillMaxWidth()) { OutlinedTextField(value = basicPay, onValueChange = { basicPay = it.filter { ch -> ch.isDigit() } }, label = { Text("Basic Pay (≤ 43600)") }, keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number), singleLine = true, modifier = Modifier.weight(1f)) OutlinedTextField(value = daPercent, onValueChange = { daPercent = it.replace(',', '.').filter { ch -> ch.isDigit() || ch == '.' } }, label = { Text("DA %") }, keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Decimal), singleLine = true, modifier = Modifier.weight(1f)) }
+
+Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+         Button(onClick = {
+             scope.launch {
+                 val total = totalHours(fromTime, toTime)
+                 val night = nightHoursBetween(fromTime, toTime)
+                 val (capped, nda) = computeNdaAmount(basicPay.toIntOrNull() ?: 0, daPercent.toDoubleOrNull() ?: 0.0, night)
+                 entity?.let { e ->
+                     val updated = e.copy(
+                         dutyDate = dutyDate,
+                         fromTime = fromTime,
+                         toTime = toTime,
+                         totalHours = total,
+                         nightHours = night,
+                         basicPayCapped = capped,
+                         daPercent = daPercent.toDoubleOrNull() ?: 0.0,
+                         ndaAmount = nda
+                     )
+                     db.dutyDao().update(updated)
+                     Toast.makeText(ctx, "Updated", Toast.LENGTH_SHORT).show()
+                     nav.popBackStack()
+                 }
+             }
+         }) { Text("Update") }
+
+         OutlinedButton(onClick = { nav.popBackStack() }) { Text("Cancel") }
+     }
+ }
+
+} }
+
+
