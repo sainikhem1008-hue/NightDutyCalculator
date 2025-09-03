@@ -1,5 +1,7 @@
 package com.khem.nightdutycalculator
 
+import android.content.Context
+import android.content.Intent
 import android.os.Bundle
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
@@ -7,6 +9,7 @@ import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.*
 import androidx.compose.material.icons.Icons
@@ -20,6 +23,11 @@ import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import com.itextpdf.text.Document
+import com.itextpdf.text.Paragraph
+import com.itextpdf.text.pdf.PdfWriter
+import java.io.File
+import java.io.FileOutputStream
 import java.time.LocalDate
 import java.time.LocalTime
 import java.time.format.DateTimeFormatter
@@ -42,7 +50,8 @@ fun NightDutyCalculatorApp() {
 
 @Composable
 fun NightDutyCalculatorScreen() {
-    // State variables
+    val context = LocalContext.current
+
     val scrollState = rememberLazyListState()
 
     var dutyDate by remember { mutableStateOf(LocalDate.now()) }
@@ -73,6 +82,7 @@ fun NightDutyCalculatorScreen() {
     var history by remember { mutableStateOf(listOf<String>()) }
 
     // --- Dialogs ---
+
     DatePickerDialog(
         show = showDatePicker,
         initialDate = dutyDate,
@@ -144,11 +154,13 @@ fun NightDutyCalculatorScreen() {
     }
 
     // --- Layout ---
-    LazyColumn(modifier = Modifier
-        .fillMaxSize()
-        .background(Color.White)
-        .padding(horizontal = 12.dp)
-        , state = scrollState
+
+    LazyColumn(
+        modifier = Modifier
+            .fillMaxSize()
+            .background(Color.White)
+            .padding(horizontal = 12.dp),
+        state = scrollState
     ) {
 
         // Header Card
@@ -177,7 +189,7 @@ fun NightDutyCalculatorScreen() {
             }
         }
 
-        // --- Input Fields ---
+        // Input Fields
         item {
             OutlinedTextField(
                 value = dutyDate.format(DateTimeFormatter.ISO_DATE),
@@ -198,7 +210,6 @@ fun NightDutyCalculatorScreen() {
             )
             Spacer(Modifier.height(4.dp))
         }
-
         item {
             Row(
                 verticalAlignment = Alignment.CenterVertically,
@@ -241,39 +252,44 @@ fun NightDutyCalculatorScreen() {
             }
             Spacer(Modifier.height(4.dp))
         }
-
         item {
             OutlinedTextField(
                 value = ceilingLimit,
                 onValueChange = { ceilingLimit = it },
                 label = { Text("Ceiling Limit (\u20B9)") },
                 keyboardOptions = KeyboardOptions.Default,
-                modifier = Modifier.fillMaxWidth().padding(vertical = 4.dp)
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(vertical = 4.dp)
             )
         }
-
         item {
             OutlinedTextField(
                 value = basicPay,
                 onValueChange = { basicPay = it },
                 label = { Text("Basic Pay (\u20B9)") },
                 keyboardOptions = KeyboardOptions.Default,
-                modifier = Modifier.fillMaxWidth().padding(vertical = 4.dp)
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(vertical = 4.dp)
             )
         }
-
         item {
             OutlinedTextField(
                 value = daPercent,
                 onValueChange = { daPercent = it },
                 label = { Text("Dearness Allowance (%)") },
                 keyboardOptions = KeyboardOptions.Default,
-                modifier = Modifier.fillMaxWidth().padding(vertical = 4.dp)
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(vertical = 4.dp)
             )
         }
-
         item {
-            Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.padding(vertical = 8.dp)) {
+            Row(
+                verticalAlignment = Alignment.CenterVertically,
+                modifier = Modifier.padding(vertical = 8.dp)
+            ) {
                 Checkbox(checked = isNationalHoliday, onCheckedChange = { isNationalHoliday = it })
                 Text("National Holiday", modifier = Modifier.padding(start = 4.dp))
                 Spacer(Modifier.width(24.dp))
@@ -282,7 +298,7 @@ fun NightDutyCalculatorScreen() {
             }
         }
 
-        // --- Major Action Buttons ---
+        // Major Action Buttons
         item {
             Row(
                 horizontalArrangement = Arrangement.spacedBy(8.dp),
@@ -331,7 +347,7 @@ fun NightDutyCalculatorScreen() {
             }
         }
 
-        // --- Results and Warning Banner ---
+        // Results and Warning Banner
         item {
             if (warningText.isNotEmpty()) {
                 Card(
@@ -370,7 +386,7 @@ fun NightDutyCalculatorScreen() {
             }
         }
 
-        // --- Secondary Actions: Save/Export and Clear/Exit ---
+        // Secondary Actions: Save/Export and Clear/Exit
         item {
             Column {
                 Row(
@@ -380,13 +396,21 @@ fun NightDutyCalculatorScreen() {
                         .padding(vertical = 4.dp)
                 ) {
                     Button(onClick = {
-                        // Save: Add report to history
+                        // Save report text to internal storage file
                         if (reportText.isNotBlank()) {
+                            saveReportToFile(context, reportText)
+                            // Add to history state
                             history = history + reportText
                         }
                     }, modifier = Modifier.weight(1f)) { Text("💾 Save") }
                     Button(onClick = {
-                        // Export PDF: Stub, extend as needed
+                        // Generate and export PDF with reportText
+                        if (reportText.isNotBlank()) {
+                            val pdfFile = generatePdf(context, reportText)
+                            if (pdfFile != null) {
+                                sharePdfFile(context, pdfFile)
+                            }
+                        }
                     }, modifier = Modifier.weight(1f)) { Text("📄 Export PDF") }
                 }
                 Row(
@@ -396,6 +420,7 @@ fun NightDutyCalculatorScreen() {
                         .padding(vertical = 4.dp)
                 ) {
                     Button(onClick = {
+                        // Clear all inputs and states
                         dutyDate = LocalDate.now()
                         fromTime = "00:00"
                         toTime = "08:00"
@@ -414,13 +439,16 @@ fun NightDutyCalculatorScreen() {
                         newLeaveEntry = ""
                     }, modifier = Modifier.weight(1f)) { Text("🗑️ Clear All") }
                     Button(onClick = {
-                        // Exit: Call finish() from activity, if needed
+                        // Exit the app/activity safely
+                        if (context is ComponentActivity) {
+                            context.finish()
+                        }
                     }, modifier = Modifier.weight(1f)) { Text("🚪 Exit") }
                 }
             }
         }
 
-        // --- Record/History List ---
+        // Record/History List
         item {
             Divider(Modifier.padding(vertical = 8.dp))
             Text("History", style = MaterialTheme.typography.h6, modifier = Modifier.padding(8.dp))
@@ -446,9 +474,14 @@ fun NightDutyCalculatorScreen() {
     }
 }
 
-// --- Date & Time Picker Dialogs (Compose helper functions) ---
+// Date & Time Picker Dialogs (Compose helper functions)
 @Composable
-fun DatePickerDialog(show: Boolean, initialDate: LocalDate, onDateSelected: (LocalDate) -> Unit, onDismiss: () -> Unit) {
+fun DatePickerDialog(
+    show: Boolean,
+    initialDate: LocalDate,
+    onDateSelected: (LocalDate) -> Unit,
+    onDismiss: () -> Unit
+) {
     if (show) {
         val context = LocalContext.current
         LaunchedEffect(show) {
@@ -468,7 +501,12 @@ fun DatePickerDialog(show: Boolean, initialDate: LocalDate, onDateSelected: (Loc
 }
 
 @Composable
-fun TimePickerDialog(show: Boolean, initialTime: String, onTimeSelected: (String) -> Unit, onDismiss: () -> Unit) {
+fun TimePickerDialog(
+    show: Boolean,
+    initialTime: String,
+    onTimeSelected: (String) -> Unit,
+    onDismiss: () -> Unit
+) {
     if (show) {
         val context = LocalContext.current
         val parsedTime = try { LocalTime.parse(initialTime) } catch (e: Exception) { LocalTime.of(0, 0) }
@@ -488,7 +526,7 @@ fun TimePickerDialog(show: Boolean, initialTime: String, onTimeSelected: (String
     }
 }
 
-// --- Helpers ---
+// Time Calculation Helpers
 fun calculateTimeDiff(from: String, to: String): Double {
     return try {
         val fromT = LocalTime.parse(from)
@@ -523,7 +561,85 @@ fun getHourlySegments(from: String, to: String): List<Int> {
 
 fun isNightHour(hour: Int): Boolean = (hour in 22..23) || (hour in 0..5)
 
+// Report Generator Function
 fun generateReport(
-    dutyDate: String, fromTime: String, toTime: String,
-    totalDutyHours: Double, nightDutyHours: Double, nightAllowance: Double, ndaAmount: Double,
-    basicP
+    dutyDate: String,
+    fromTime: String,
+    toTime: String,
+    totalDutyHours: Double,
+    nightDutyHours: Double,
+    nightAllowance: Double,
+    ndaAmount: Double,
+    basicPay: Double,
+    daPercent: String,
+    ceilingLimit: String,
+    isNationalHoliday: Boolean,
+    isWeeklyRest: Boolean,
+    leaveEntries: List<String>
+): String {
+    val builder = StringBuilder()
+    builder.appendLine("Night Duty Allowance Report")
+    builder.appendLine("Date: $dutyDate")
+    builder.appendLine("Time: $fromTime to $toTime")
+    builder.appendLine("Total Duty Hours: %.2f".format(totalDutyHours))
+    builder.appendLine("Night Duty Hours: %.2f".format(nightDutyHours))
+    builder.appendLine("Basic Pay: ₹%.2f".format(basicPay))
+    builder.appendLine("Dearness Allowance: $daPercent%")
+    builder.appendLine("Ceiling Limit: ₹$ceilingLimit")
+    builder.appendLine("National Holiday: ${if (isNationalHoliday) "Yes" else "No"}")
+    builder.appendLine("Weekly Rest: ${if (isWeeklyRest) "Yes" else "No"}")
+    builder.appendLine("Night Allowance: ₹%.2f".format(nightAllowance))
+    builder.appendLine()
+    if (leaveEntries.isNotEmpty()) {
+        builder.appendLine("Leave Notes:")
+        leaveEntries.forEach { builder.appendLine("- $it") }
+    }
+    return builder.toString()
+}
+
+// Save report text to internal storage
+fun saveReportToFile(context: Context, report: String) {
+    try {
+        val fileName = "night_duty_report_${System.currentTimeMillis()}.txt"
+        context.openFileOutput(fileName, Context.MODE_PRIVATE).use { fos ->
+            fos.write(report.toByteArray())
+        }
+    } catch (ex: Exception) {
+        ex.printStackTrace()
+    }
+}
+
+// Generate PDF from report text, save file, return file reference
+fun generatePdf(context: Context, text: String): File? {
+    return try {
+        val document = Document()
+        val fileName = "night_duty_report_${System.currentTimeMillis()}.pdf"
+        val file = File(context.filesDir, fileName)
+        PdfWriter.getInstance(document, FileOutputStream(file))
+        document.open()
+        document.add(Paragraph(text))
+        document.close()
+        file
+    } catch (ex: Exception) {
+        ex.printStackTrace()
+        null
+    }
+}
+
+// Share the generated PDF file using Android share intent
+fun sharePdfFile(context: Context, file: File) {
+    val uri = androidx.core.content.FileProvider.getUriForFile(
+        context,
+        context.packageName + ".fileprovider",
+        file
+    )
+    val intent = Intent(Intent.ACTION_SEND).apply {
+        type = "application/pdf"
+        putExtra(Intent.EXTRA_STREAM, uri)
+        addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)
+    }
+    context.startActivity(
+        Intent.createChooser(intent, "Share PDF")
+            .addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+    )
+}
