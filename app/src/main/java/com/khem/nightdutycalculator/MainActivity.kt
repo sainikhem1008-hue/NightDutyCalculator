@@ -40,21 +40,10 @@ class MainActivity : ComponentActivity() {
     }
 }
 
-@Composable
-fun NightDutyCalculatorApp() {
-    MaterialTheme {
-        Surface(modifier = Modifier.fillMaxSize(), color = Color(0xFFF5F5F5)) {
-            NightDutyCalculatorScreen()
-        }
-    }
-}
-
-@Composable
+   @Composable
 fun NightDutyCalculatorScreen() {
-    val history   = remember { mutableStateListOf<String>() }
-    
     val context = LocalContext.current
-
+    val history = remember { mutableStateListOf<String>() }
     val scrollState = rememberLazyListState()
 
     var dutyDate by remember { mutableStateOf(LocalDate.now()) }
@@ -81,12 +70,8 @@ fun NightDutyCalculatorScreen() {
     var leaveEntries by remember { mutableStateOf(listOf<String>()) }
     var showLeaveDialog by remember { mutableStateOf(false) }
     var newLeaveEntry by remember { mutableStateOf("") }
-    
-    
-    
 
-    // --- Dialogs ---
-
+    // --- Date & Time Pickers ---
     DatePickerDialog(
         show = showDatePicker,
         initialDate = dutyDate,
@@ -115,6 +100,7 @@ fun NightDutyCalculatorScreen() {
         onDismiss = { showToTimePicker = false }
     )
 
+    // Leave Dialog
     if (showLeaveDialog) {
         AlertDialog(
             onDismissRequest = { showLeaveDialog = false },
@@ -151,14 +137,11 @@ fun NightDutyCalculatorScreen() {
                     }
                 }
             },
-            confirmButton = {
-                Button(onClick = { showLeaveDialog = false }) { Text("Close") }
-            }
+            confirmButton = { Button(onClick = { showLeaveDialog = false }) { Text("Close") } }
         )
     }
 
-    // --- Layout ---
-
+    // --- Main UI ---
     LazyColumn(
         modifier = Modifier
             .fillMaxSize()
@@ -166,8 +149,7 @@ fun NightDutyCalculatorScreen() {
             .padding(horizontal = 12.dp),
         state = scrollState
     ) {
-
-        // Header Card
+        // Header
         item {
             Card(
                 backgroundColor = Color(0xFF1976D2),
@@ -178,17 +160,8 @@ fun NightDutyCalculatorScreen() {
                     .padding(vertical = 16.dp)
             ) {
                 Column(Modifier.padding(24.dp)) {
-                    Text(
-                        "🌙 Night Duty Calculator",
-                        fontSize = 22.sp,
-                        color = Color.White,
-                        fontWeight = FontWeight.Bold
-                    )
-                    Text(
-                        "Calculate and track your allowances",
-                        fontSize = 14.sp,
-                        color = Color.White
-                    )
+                    Text("🌙 Night Duty Calculator", fontSize = 22.sp, color = Color.White, fontWeight = FontWeight.Bold)
+                    Text("Calculate and track your allowances", fontSize = 14.sp, color = Color.White)
                 }
             }
         }
@@ -200,439 +173,163 @@ fun NightDutyCalculatorScreen() {
                 onValueChange = {},
                 label = { Text("Duty Date") },
                 readOnly = true,
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .padding(vertical = 4.dp),
-                colors = TextFieldDefaults.textFieldColors(
-                    backgroundColor = Color(0xFFE3F2FD)
-                ),
+                modifier = Modifier.fillMaxWidth().padding(vertical = 4.dp),
+                colors = TextFieldDefaults.textFieldColors(backgroundColor = Color(0xFFE3F2FD)),
                 trailingIcon = {
                     IconButton(onClick = { showDatePicker = true }) {
                         Icon(Icons.Filled.DateRange, contentDescription = "Pick Date")
                     }
                 }
             )
-            Spacer(Modifier.height(4.dp))
         }
         item {
-            Row(
-                verticalAlignment = Alignment.CenterVertically,
-                modifier = Modifier.fillMaxWidth()
-            ) {
+            Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
                 OutlinedTextField(
                     value = fromTime,
                     onValueChange = { fromTime = it },
                     label = { Text("From Time (HH:mm)") },
-                    modifier = Modifier
-                        .weight(1f)
-                        .padding(end = 4.dp),
-                    keyboardOptions = KeyboardOptions.Default,
-                    colors = TextFieldDefaults.textFieldColors(
-                        backgroundColor = Color(0xFFE3F2FD)
-                    ),
-                    trailingIcon = {
-                        IconButton(onClick = { showFromTimePicker = true }) {
-                            Icon(Icons.Filled.Schedule, contentDescription = "Pick From Time")
-                        }
-                    }
+                    modifier = Modifier.weight(1f).padding(end = 4.dp),
+                    trailingIcon = { IconButton(onClick = { showFromTimePicker = true }) { Icon(Icons.Filled.Schedule, "Pick") } }
                 )
                 OutlinedTextField(
                     value = toTime,
                     onValueChange = { toTime = it },
                     label = { Text("To Time (HH:mm)") },
-                    modifier = Modifier
-                        .weight(1f)
-                        .padding(start = 4.dp),
-                    keyboardOptions = KeyboardOptions.Default,
-                    colors = TextFieldDefaults.textFieldColors(
-                        backgroundColor = Color(0xFFE3F2FD)
-                    ),
-                    trailingIcon = {
-                        IconButton(onClick = { showToTimePicker = true }) {
-                            Icon(Icons.Filled.Schedule, contentDescription = "Pick To Time")
-                        }
-                    }
+                    modifier = Modifier.weight(1f).padding(start = 4.dp),
+                    trailingIcon = { IconButton(onClick = { showToTimePicker = true }) { Icon(Icons.Filled.Schedule, "Pick") } }
                 )
             }
-            Spacer(Modifier.height(4.dp))
         }
         item {
-            OutlinedTextField(
-                value = ceilingLimit,
-                onValueChange = { ceilingLimit = it },
-                label = { Text("Ceiling Limit (\u20B9)") },
-                keyboardOptions = KeyboardOptions.Default,
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .padding(vertical = 4.dp)
-            )
+            OutlinedTextField(value = ceilingLimit, onValueChange = { ceilingLimit = it }, label = { Text("Ceiling Limit (\u20B9)") }, modifier = Modifier.fillMaxWidth().padding(vertical = 4.dp))
+            OutlinedTextField(value = basicPay, onValueChange = { basicPay = it }, label = { Text("Basic Pay (\u20B9)") }, modifier = Modifier.fillMaxWidth().padding(vertical = 4.dp))
+            OutlinedTextField(value = daPercent, onValueChange = { daPercent = it }, label = { Text("Dearness Allowance (%)") }, modifier = Modifier.fillMaxWidth().padding(vertical = 4.dp))
         }
         item {
-            OutlinedTextField(
-                value = basicPay,
-                onValueChange = { basicPay = it },
-                label = { Text("Basic Pay (\u20B9)") },
-                keyboardOptions = KeyboardOptions.Default,
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .padding(vertical = 4.dp)
-            )
-        }
-        item {
-            OutlinedTextField(
-                value = daPercent,
-                onValueChange = { daPercent = it },
-                label = { Text("Dearness Allowance (%)") },
-                keyboardOptions = KeyboardOptions.Default,
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .padding(vertical = 4.dp)
-            )
-        }
-        item {
-            Row(
-                verticalAlignment = Alignment.CenterVertically,
-                modifier = Modifier.padding(vertical = 8.dp)
-            ) {
+            Row(Modifier.padding(vertical = 8.dp), verticalAlignment = Alignment.CenterVertically) {
                 Checkbox(checked = isNationalHoliday, onCheckedChange = { isNationalHoliday = it })
-                Text("National Holiday", modifier = Modifier.padding(start = 4.dp))
+                Text("National Holiday", Modifier.padding(start = 4.dp))
                 Spacer(Modifier.width(24.dp))
                 Checkbox(checked = isWeeklyRest, onCheckedChange = { isWeeklyRest = it })
-                Text("Weekly Rest", modifier = Modifier.padding(start = 4.dp))
+                Text("Weekly Rest", Modifier.padding(start = 4.dp))
             }
         }
 
-        // Major Action Buttons
+        // Buttons: Calculate & Leave
         item {
-            Row(
-                horizontalArrangement = Arrangement.spacedBy(8.dp),
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .padding(vertical = 8.dp)
-            ) {
-                Button(
-                    onClick = {
-                        totalDutyHours = calculateTimeDiff(fromTime, toTime)
-                        nightDutyHours = calculateNightDutyHours(fromTime, toTime)
-                        val pay = basicPay.toDoubleOrNull() ?: 0.0
-                        val daPerc = daPercent.toDoubleOrNull() ?: 0.0
-                        val daValue = pay * daPerc / 100.0
-                        ndaAmount = ((pay + daValue) / 200.0) * (nightDutyHours / 6.0)
-                        nightAllowance = ndaAmount
+            Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                Button(onClick = {
+                    totalDutyHours = calculateTimeDiff(fromTime, toTime)
+                    nightDutyHours = calculateNightDutyHours(fromTime, toTime)
+                    val pay = basicPay.toDoubleOrNull() ?: 0.0
+                    val daPerc = daPercent.toDoubleOrNull() ?: 0.0
+                    val daValue = pay * daPerc / 100.0
+                    ndaAmount = ((pay + daValue) / 200.0) * (nightDutyHours / 6.0)
+                    nightAllowance = ndaAmount
 
-                        reportText = generateReport(
-                            dutyDate = dutyDate.format(DateTimeFormatter.ISO_DATE),
-                            fromTime = fromTime,
-                            toTime = toTime,
-                            totalDutyHours = totalDutyHours,
-                            nightDutyHours = nightDutyHours,
-                            nightAllowance = nightAllowance,
-                            ndaAmount = ndaAmount,
-                            basicPay = pay,
-                            daPercent = daPercent,
-                            ceilingLimit = ceilingLimit,
-                            isNationalHoliday = isNationalHoliday,
-                            isWeeklyRest = isWeeklyRest,
-                            leaveEntries = leaveEntries
-                        )
+                    reportText = generateReport(
+                        dutyDate.format(DateTimeFormatter.ISO_DATE),
+                        fromTime,
+                        toTime,
+                        totalDutyHours,
+                        nightDutyHours,
+                        nightAllowance,
+                        ndaAmount,
+                        pay,
+                        daPercent,
+                        ceilingLimit,
+                        isNationalHoliday,
+                        isWeeklyRest,
+                        leaveEntries
+                    )
 
-                        warningText =
-                            if (pay > (ceilingLimit.toDoubleOrNull() ?: pay))
-                                "Basic Pay exceeds ceiling limit! No NDA applicable."
-                            else
-                                ""
-                    },
-                    modifier = Modifier.weight(1f)
-                ) { Text("🧮 Calculate Allowance") }
-                Button(
-                    onClick = { showLeaveDialog = true },
-                    modifier = Modifier.weight(1f)
-                ) { Text("📅 Leave Management") }
+                    warningText = if (pay > (ceilingLimit.toDoubleOrNull() ?: pay))
+                        "Basic Pay exceeds ceiling limit! No NDA applicable."
+                    else ""
+                }, modifier = Modifier.weight(1f)) { Text("🧮 Calculate Allowance") }
+
+                Button(onClick = { showLeaveDialog = true }, modifier = Modifier.weight(1f)) { Text("📅 Leave Management") }
             }
         }
 
-        // Results and Warning Banner
+        // Warning and Report
         item {
             if (warningText.isNotEmpty()) {
-                Card(
-                    backgroundColor = Color(0xFFFF9800),
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .padding(vertical = 8.dp)
-                ) {
-                    Text(
-                        text = warningText,
-                        color = Color.White,
-                        fontWeight = FontWeight.Bold,
-                        modifier = Modifier.padding(12.dp)
-                    )
+                Card(backgroundColor = Color(0xFFFF9800), modifier = Modifier.fillMaxWidth().padding(vertical = 8.dp)) {
+                    Text(warningText, color = Color.White, fontWeight = FontWeight.Bold, modifier = Modifier.padding(12.dp))
                 }
             }
-
             if (reportText.isNotEmpty()) {
-                Card(
-                    backgroundColor = Color(0xFFE0E0E0),
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .padding(vertical = 8.dp),
-                    elevation = 4.dp,
-                    shape = RoundedCornerShape(8.dp)
-                ) {
-                    Column(modifier = Modifier.padding(8.dp)) {
-                        Text(reportText)
-                    }
+                Card(backgroundColor = Color(0xFFE0E0E0), modifier = Modifier.fillMaxWidth().padding(vertical = 8.dp), elevation = 4.dp, shape = RoundedCornerShape(8.dp)) {
+                    Column(Modifier.padding(8.dp)) { Text(reportText) }
                 }
             } else {
-                Text(
-                    "No report generated. Fill fields and tap Calculate.",
-                    modifier = Modifier.padding(8.dp)
-                )
+                Text("No report generated. Fill fields and tap Calculate.", Modifier.padding(8.dp))
             }
         }
 
-        
+        // Secondary Actions: Save, Export, Clear, Exit
+        item {
+            Column {
+                Row(Modifier.fillMaxWidth().padding(vertical = 4.dp), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                    Button(onClick = {
+                        if (reportText.isNotBlank()) {
+                            history.add(reportText)
+                            Toast.makeText(context, "Saved!", Toast.LENGTH_SHORT).show()
+                        } else {
+                            Toast.makeText(context, "Calculate first!", Toast.LENGTH_SHORT).show()
+                        }
+                    }, modifier = Modifier.weight(1f)) { Text("💾 Save") }
 
-// Secondary Actions: Save/Export and Clear/Exit
-item {
-    Column {
-        Row(
-            horizontalArrangement = Arrangement.spacedBy(8.dp),
-            modifier = Modifier
-                .fillMaxWidth()
-                .padding(vertical = 4.dp)
-        ) {
-            Button(onClick = {
-                if (reportText.isNotBlank()) {
-                history.add(reportText)
-                 }
-               }, modifier = Modifier.weight(1f)) { Text("💾 Save") }
-
-            
-
-            Button(onClick = {
-                // Generate and export PDF with reportText
-                if (reportText.isNotBlank()) {
-                    val pdfFile = generatePdf(context, reportText)
-                    if (pdfFile != null) {
-                        sharePdfFile(context, pdfFile)
-                    }
+                    Button(onClick = {
+                        if (reportText.isNotBlank()) {
+                            val pdfFile = generatePdf(context, reportText)
+                            if (pdfFile != null) sharePdfFile(context, pdfFile)
+                        }
+                    }, modifier = Modifier.weight(1f)) { Text("📄 Export PDF") }
                 }
-            }, modifier = Modifier.weight(1f)) { Text("📄 Export PDF") }
-        }
-        Row(
-            horizontalArrangement = Arrangement.spacedBy(8.dp),
-            modifier = Modifier
-                .fillMaxWidth()
-                .padding(vertical = 4.dp)
-        ) {
-            Button(onClick = {
-                // Clear all inputs and states
-                dutyDate = LocalDate.now()
-                fromTime = "00:00"
-                toTime = "08:00"
-                ceilingLimit = "43600"
-                basicPay = "43600"
-                daPercent = "55.0"
-                isNationalHoliday = false
-                isWeeklyRest = false
-                totalDutyHours = 0.0
-                nightDutyHours = 0.0
-                nightAllowance = 0.0
-                ndaAmount = 0.0
-                reportText = ""
-                warningText = ""
-                leaveEntries = emptyList()
-                newLeaveEntry = ""
-            }, modifier = Modifier.weight(1f)) { Text("🗑️ Clear All") }
 
-            Button(onClick = {
-                // Exit the app/activity safely
-                if (context is ComponentActivity) {
-                    context.finish()
+                Row(Modifier.fillMaxWidth().padding(vertical = 4.dp), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                    Button(onClick = {
+                        // Clear all
+                        dutyDate = LocalDate.now()
+                        fromTime = "00:00"
+                        toTime = "08:00"
+                        ceilingLimit = "43600"
+                        basicPay = "43600"
+                        daPercent = "55.0"
+                        isNationalHoliday = false
+                        isWeeklyRest = false
+                        totalDutyHours = 0.0
+                        nightDutyHours = 0.0
+                        nightAllowance = 0.0
+                        ndaAmount = 0.0
+                        reportText = ""
+                        warningText = ""
+                        leaveEntries = emptyList()
+                        newLeaveEntry = ""
+                    }, modifier = Modifier.weight(1f)) { Text("🗑️ Clear All") }
+
+                    Button(onClick = { if (context is ComponentActivity) context.finish() }, modifier = Modifier.weight(1f)) { Text("🚪 Exit") }
                 }
-            }, modifier = Modifier.weight(1f)) { Text("🚪 Exit") }
+            }
         }
-    }
-}
 
-        // Record/History List
+        // History Section
         item {
             Divider(Modifier.padding(vertical = 8.dp))
             Text("History", style = MaterialTheme.typography.h6, modifier = Modifier.padding(8.dp))
-
             if (history.isEmpty()) {
-                Text("No saved reports.", modifier = Modifier.padding(8.dp))
+                Text("No saved reports.", Modifier.padding(8.dp))
             } else {
-                LazyColumn {
-                    items(history) { entry ->
-                   Card(
-                backgroundColor = Color(0xFFF5F5F5),
-                modifier = Modifier.fillMaxWidth().padding(vertical = 4.dp),
-                    elevation = 2.dp
-        ) {
-            Text(entry, modifier = Modifier.padding(8.dp))
-                      }
-                   }
-}
-
+                Column {
+                    history.forEach { entry ->
+                        Card(backgroundColor = Color(0xFFF5F5F5), modifier = Modifier.fillMaxWidth().padding(vertical = 4.dp), elevation = 2.dp) {
+                            Text(entry, modifier = Modifier.padding(8.dp))
+                        }
+                    }
+                }
             }
         }
     }
-}
-
-// Date & Time Picker Dialogs (Compose helper functions)
-@Composable
-fun DatePickerDialog(
-    show: Boolean,
-    initialDate: LocalDate,
-    onDateSelected: (LocalDate) -> Unit,
-    onDismiss: () -> Unit
-) {
-    if (show) {
-        val context = LocalContext.current
-        LaunchedEffect(show) {
-            android.app.DatePickerDialog(
-                context,
-                { _, year, month, day ->
-                    onDateSelected(LocalDate.of(year, month + 1, day))
-                },
-                initialDate.year,
-                initialDate.monthValue - 1,
-                initialDate.dayOfMonth
-            ).apply {
-                setOnCancelListener { onDismiss() }
-            }.show()
-        }
-    }
-}
-
-@Composable
-fun TimePickerDialog(
-    show: Boolean,
-    initialTime: String,
-    onTimeSelected: (String) -> Unit,
-    onDismiss: () -> Unit
-) {
-    if (show) {
-        val context = LocalContext.current
-        val parsedTime = try { LocalTime.parse(initialTime) } catch (e: Exception) { LocalTime.of(0, 0) }
-        LaunchedEffect(show) {
-            android.app.TimePickerDialog(
-                context,
-                { _, hour, minute ->
-                    onTimeSelected(String.format("%02d:%02d", hour, minute))
-                },
-                parsedTime.hour,
-                parsedTime.minute,
-                true
-            ).apply {
-                setOnCancelListener { onDismiss() }
-            }.show()
-        }
-    }
-}
-
-// Time Calculation Helpers
-fun calculateTimeDiff(from: String, to: String): Double {
-    return try {
-        val fromT = LocalTime.parse(from)
-        val toT = LocalTime.parse(to)
-        val diff = if (toT.isAfter(fromT)) {
-            toT.toSecondOfDay() - fromT.toSecondOfDay()
-        } else {
-            (24 * 60 * 60 - fromT.toSecondOfDay()) + toT.toSecondOfDay()
-        }
-        diff / 3600.0
-    } catch (e: Exception) { 0.0 }
-}
-
-fun calculateNightDutyHours(from: String, to: String): Double {
-    val allHours = getHourlySegments(from, to)
-    return allHours.count { isNightHour(it) }.toDouble()
-}
-
-fun getHourlySegments(from: String, to: String): List<Int> {
-    return try {
-        val fromT = LocalTime.parse(from)
-        val toT = LocalTime.parse(to)
-        val hours = mutableListOf<Int>()
-        var current = fromT.hour
-        val total = (calculateTimeDiff(from, to)).toInt()
-        repeat(total) {
-            hours.add((current + it) % 24)
-        }
-        hours
-    } catch (ex: Exception) { emptyList() }
-}
-
-fun isNightHour(hour: Int): Boolean = (hour in 22..23) || (hour in 0..5)
-
-// Report Generator Function
-fun generateReport(
-    dutyDate: String,
-    fromTime: String,
-    toTime: String,
-    totalDutyHours: Double,
-    nightDutyHours: Double,
-    nightAllowance: Double,
-    ndaAmount: Double,
-    basicPay: Double,
-    daPercent: String,
-    ceilingLimit: String,
-    isNationalHoliday: Boolean,
-    isWeeklyRest: Boolean,
-    leaveEntries: List<String>
-): String {
-    val builder = StringBuilder()
-    builder.appendLine("Night Duty Allowance Report")
-    builder.appendLine("Date: $dutyDate")
-    builder.appendLine("Time: $fromTime to $toTime")
-    builder.appendLine("Total Duty Hours: %.2f".format(totalDutyHours))
-    builder.appendLine("Night Duty Hours: %.2f".format(nightDutyHours))
-    builder.appendLine("Basic Pay: ₹%.2f".format(basicPay))
-    builder.appendLine("Dearness Allowance: $daPercent%")
-    builder.appendLine("Ceiling Limit: ₹$ceilingLimit")
-    builder.appendLine("National Holiday: ${if (isNationalHoliday) "Yes" else "No"}")
-    builder.appendLine("Weekly Rest: ${if (isWeeklyRest) "Yes" else "No"}")
-    builder.appendLine("Night Allowance: ₹%.2f".format(nightAllowance))
-    builder.appendLine()
-    if (leaveEntries.isNotEmpty()) {
-        builder.appendLine("Leave Notes:")
-        leaveEntries.forEach { builder.appendLine("- $it") }
-    }
-    return builder.toString()
-}
-
-// PDF generation and sharing remain unchanged
-fun generatePdf(context: Context, text: String): File? {
-    return try {
-        val document = Document()
-        val fileName = "night_duty_report_${System.currentTimeMillis()}.pdf"
-        val file = File(context.filesDir, fileName)
-        PdfWriter.getInstance(document, FileOutputStream(file))
-        document.open()
-        document.add(Paragraph(text))
-        document.close()
-        file
-    } catch (ex: Exception) {
-        ex.printStackTrace()
-        null
-    }
-}
-
-fun sharePdfFile(context: Context, file: File) {
-    val uri = androidx.core.content.FileProvider.getUriForFile(
-        context,
-        context.packageName + ".fileprovider",
-        file
-    )
-    val intent = Intent(Intent.ACTION_SEND).apply {
-        type = "application/pdf"
-        putExtra(Intent.EXTRA_STREAM, uri)
-        addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)
-    }
-    context.startActivity(
-        Intent.createChooser(intent, "Share PDF")
-            .addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
-    )
 }
