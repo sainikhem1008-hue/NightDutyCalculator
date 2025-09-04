@@ -51,6 +51,8 @@ fun NightDutyCalculatorApp() {
 
 @Composable
 fun NightDutyCalculatorScreen() {
+    val history = remember { mutableStateListOf<String>() }
+    
     val context = LocalContext.current
 
     val scrollState = rememberLazyListState()
@@ -79,9 +81,9 @@ fun NightDutyCalculatorScreen() {
     var leaveEntries by remember { mutableStateOf(listOf<String>()) }
     var showLeaveDialog by remember { mutableStateOf(false) }
     var newLeaveEntry by remember { mutableStateOf("") }
-    // Place this at the top of NightDutyCalculatorScreen
-    val history = remember { mutableStateListOf<String>() }
-    var history by remember { mutableStateOf(listOf<String>()) }
+    
+    
+    
 
     // --- Dialogs ---
 
