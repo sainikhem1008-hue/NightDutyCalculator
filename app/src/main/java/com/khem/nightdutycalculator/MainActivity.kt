@@ -51,7 +51,7 @@ fun NightDutyCalculatorApp() {
 
 @Composable
 fun NightDutyCalculatorScreen() {
-    val history = remember { mutableStateListOf<String>() }
+    val  history = remember { mutableStateListOf<String>() }
     
     val context = LocalContext.current
 
