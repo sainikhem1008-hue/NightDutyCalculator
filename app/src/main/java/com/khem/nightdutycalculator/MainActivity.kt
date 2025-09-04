@@ -402,11 +402,12 @@ item {
                 .padding(vertical = 4.dp)
         ) {
             Button(onClick = {
-                // Strictly in-app save to history state
                 if (reportText.isNotBlank()) {
-                    history.add(reportText)
-                }
-            }, modifier = Modifier.weight(1f)) { Text("💾 Save") }
+                history.add(reportText)
+                 }
+               }, modifier = Modifier.weight(1f)) { Text("💾 Save") }
+
+            
 
             Button(onClick = {
                 // Generate and export PDF with reportText
@@ -464,17 +465,16 @@ item {
             } else {
                 LazyColumn {
                     items(history) { entry ->
-                        Card(
-                            backgroundColor = Color(0xFFF5F5F5),
-                            modifier = Modifier
-                                .fillMaxWidth()
-                                .padding(vertical = 4.dp),
-                            elevation = 2.dp
-                        ) {
-                            Text(entry, modifier = Modifier.padding(8.dp))
-                        }
-                    }
-                }
+                   Card(
+                backgroundColor = Color(0xFFF5F5F5),
+                modifier = Modifier.fillMaxWidth().padding(vertical = 4.dp),
+                    elevation = 2.dp
+        ) {
+            Text(entry, modifier = Modifier.padding(8.dp))
+                      }
+                   }
+}
+
             }
         }
     }
